@@ -1,0 +1,6 @@
+{
+  "name": "Focus Shield",
+  "description": "Focus Shield and App Blocker app with routines, screen time limits, and timers",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

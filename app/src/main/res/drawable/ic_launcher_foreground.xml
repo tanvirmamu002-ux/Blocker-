@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Glow Ring -->
+    <path
+        android:pathData="M54,22 C71.67,22 86,36.33 86,54 C86,71.67 71.67,86 54,86 C36.33,86 22,71.67 22,54 C22,36.33 36.33,22 54,22 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#3300FF88"
+        android:fillColor="#00000000" />
+    <!-- Shield Outline -->
+    <path
+        android:pathData="M54,30 L74,38 L74,54 C74,67.5 65.5,76 54,80 C42.5,76 34,67.5 34,54 L34,38 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="34"
+                android:startY="30"
+                android:endX="74"
+                android:endY="80"
+                android:type="linear">
+                <item android:color="#00FF88" android:offset="0.0" />
+                <item android:color="#06B6D4" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Inner Shield Detail -->
+    <path
+        android:pathData="M54,35 L69,41 L69,53 C69,63.5 62.5,70.5 54,74 C45.5,70.5 39,63.5 39,53 L39,41 Z"
+        android:fillColor="#0D1117" />
+    <!-- Center Check / Lock symbol inside shield -->
+    <path
+        android:pathData="M54,44 L62,49 L62,55 C62,60 58.5,64 54,66 C49.5,64 46,60 46,55 L46,49 Z"
+        android:fillColor="#00FF88" />
+</vector>

@@ -1,0 +1,7 @@
+{
+  "name": "Focus Shield",
+  "description": "A dark-themed focus security and distraction blocker app with active radar protection, schedules, analytics, strict mode, and PIN lock.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
