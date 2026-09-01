@@ -22,8 +22,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon -Djava.awt.headless=true -Dorg.gradle.jvmargs="-Xmx3072m -Djava.awt.headless=true"
+      - name: Build Debug APK with Virtual Display
+        run: xvfb-run gradle assembleDebug -x processDebugGoogleServices --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
