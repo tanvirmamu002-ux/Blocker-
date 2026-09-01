@@ -1,14 +1,26 @@
 {
   "project_info": {
-    "project_number": "123456789",
-    "project_id": "dummy-project"
+    "project_number": "123456789012",
+    "project_id": "focus-shield-app",
+    "storage_bucket": "focus-shield-app.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:123456789:android:dummy",
+        "mobilesdk_app_id": "1:123456789012:android:abcdef123456",
         "android_client_info": {
-          "package_name": "com.example.app"
+          "package_name": "com.aistudio.focusshield.orange"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDummyKeyForBuildPurposeOnly12345"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
         }
       }
     }
