@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK (Windows)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest  # লিনাক্সের বদলে উইন্ডোজ সার্ভার ব্যবহার করা হচ্ছে
 
     steps:
       - name: Checkout Code
@@ -22,11 +22,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Debug APK with Virtual Display
-        run: xvfb-run gradle assembleDebug -x processDebugGoogleServices --no-daemon
+      - name: Build Debug APK
+        run: .\gradlew assembleDebug -x processDebugGoogleServices --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: focus-shield-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app\build\outputs\apk\debug\*.apk
