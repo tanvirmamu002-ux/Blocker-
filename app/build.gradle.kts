@@ -32,6 +32,7 @@ android {
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
+      // Keep debug config defined but do not force its use so CI/local default debug keystore is used
       storeFile = file("${rootDir}/debug.keystore")
       storePassword = "android"
       keyAlias = "androiddebugkey"
@@ -46,7 +47,8 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    // Do NOT force a custom debug signing config so the build uses the Android default debug keystore
+    debug { }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
