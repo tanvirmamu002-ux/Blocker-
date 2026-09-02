@@ -108,4 +108,68 @@ class FocusLockPreferences(context: Context) {
 
     fun getCompletedSessionCount(): Int = prefs.getInt(KEY_COMPLETED_SESSION_COUNT, 0)
     fun getTotalSavedMinutes(): Int = prefs.getInt(KEY_TOTAL_SAVED_MINUTES, 0)
+
+    fun saveRoutines(routines: List<com.example.data.FocusRoutine>) {
+        val jsonArray = org.json.JSONArray()
+        for (r in routines) {
+            val obj = org.json.JSONObject()
+            obj.put("id", r.id)
+            obj.put("titleBangla", r.titleBangla)
+            obj.put("titleEnglish", r.titleEnglish)
+            obj.put("timeRange", r.timeRange)
+            obj.put("startTime", r.startTime)
+            obj.put("endTime", r.endTime)
+            obj.put("durationText", r.durationText)
+            obj.put("activeDaysBangla", r.activeDaysBangla)
+            obj.put("activeDaysEnglish", r.activeDaysEnglish)
+            obj.put("targetedAppsBangla", r.targetedAppsBangla)
+            obj.put("targetedAppsEnglish", r.targetedAppsEnglish)
+            obj.put("colorHex", r.colorHex)
+            obj.put("iconType", r.iconType)
+            obj.put("blockShorts", r.blockShorts)
+            obj.put("blockWebsites", r.blockWebsites)
+            obj.put("isStrict", r.isStrict)
+            obj.put("isEnabled", r.isEnabled)
+            obj.put("isActiveNow", r.isActiveNow)
+            jsonArray.put(obj)
+        }
+        prefs.edit().putString("saved_routines", jsonArray.toString()).apply()
+    }
+
+    fun getRoutines(): List<com.example.data.FocusRoutine> {
+        val jsonString = prefs.getString("saved_routines", null)
+        val list = mutableListOf<com.example.data.FocusRoutine>()
+        if (jsonString.isNullOrEmpty()) return list
+        try {
+            val jsonArray = org.json.JSONArray(jsonString)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                list.add(
+                    com.example.data.FocusRoutine(
+                        id = obj.getString("id"),
+                        titleBangla = obj.getString("titleBangla"),
+                        titleEnglish = obj.getString("titleEnglish"),
+                        timeRange = obj.getString("timeRange"),
+                        startTime = obj.getString("startTime"),
+                        endTime = obj.getString("endTime"),
+                        durationText = obj.getString("durationText"),
+                        activeDaysBangla = obj.getString("activeDaysBangla"),
+                        activeDaysEnglish = obj.getString("activeDaysEnglish"),
+                        targetedAppsBangla = obj.getString("targetedAppsBangla"),
+                        targetedAppsEnglish = obj.getString("targetedAppsEnglish"),
+                        colorHex = obj.getString("colorHex"),
+                        iconType = obj.getString("iconType"),
+                        blockShorts = obj.getBoolean("blockShorts"),
+                        blockWebsites = obj.getBoolean("blockWebsites"),
+                        isStrict = obj.getBoolean("isStrict"),
+                        isEnabled = obj.getBoolean("isEnabled"),
+                        isActiveNow = obj.getBoolean("isActiveNow")
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
 }

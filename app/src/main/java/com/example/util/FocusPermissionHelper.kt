@@ -65,9 +65,31 @@ object FocusPermissionHelper {
 
     fun areAllRequiredPermissionsGranted(context: Context): Boolean {
         return isAccessibilityPermissionGranted(context) &&
-                isUsageStatsPermissionGranted(context) &&
+                isExactAlarmPermissionGranted(context) &&
                 isOverlayPermissionGranted(context) &&
-                isNotificationPermissionGranted(context)
+                isNotificationPermissionGranted(context) &&
+                isBatteryOptimizationDisabled(context) &&
+                isDeviceAdminGranted(context)
+    }
+
+    fun isExactAlarmPermissionGranted(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+            alarmManager?.canScheduleExactAlarms() ?: true
+        } else {
+            true
+        }
+    }
+
+    fun isBatteryOptimizationDisabled(context: Context): Boolean {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        return powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+    }
+
+    fun isDeviceAdminGranted(context: Context): Boolean {
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+        val componentName = android.content.ComponentName(context, "com.example.receiver.FocusDeviceAdminReceiver")
+        return dpm?.isAdminActive(componentName) ?: false
     }
 
     fun openAccessibilitySettings(context: Context) {
@@ -118,6 +140,46 @@ object FocusPermissionHelper {
                     data = Uri.parse("package:${context.packageName}")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            openGeneralSettings(context)
+        }
+    }
+
+    fun openExactAlarmSettings(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                openGeneralSettings(context)
+            }
+        }
+    }
+
+    fun openBatteryOptimizationSettings(context: Context) {
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            openGeneralSettings(context)
+        }
+    }
+
+    fun openDeviceAdminSettings(context: Context) {
+        try {
+            val componentName = android.content.ComponentName(context, "com.example.receiver.FocusDeviceAdminReceiver")
+            val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, componentName)
+                putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Required to prevent uninstallation during focus lock.")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (e: Exception) {

@@ -1,79 +1,42 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import android.content.Context
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Nightlight
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.Work
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.example.data.FocusRoutine
 import com.example.state.FocusViewModel
 import com.example.ui.components.getRoutineIconVector
 import com.example.ui.components.parseRoutineColor
 import com.example.ui.theme.AppTheme
+import java.util.Calendar
 
 @Composable
 fun CreateRoutineScreen(
@@ -81,39 +44,45 @@ fun CreateRoutineScreen(
     onBack: () -> Unit
 ) {
     val colors = AppTheme.colors
-    var currentStep by remember { mutableIntStateOf(1) } // 1: Basics, 2: Time, 3: Days, 4: Block, 5: Review
+    var currentStep by remember { mutableIntStateOf(1) } // 1: Apps, 2: Time, 3: Settings, 4: Review
+    val context = LocalContext.current
 
-    // Step 1: Basics State
-    var routineName by remember { mutableStateOf("Study Focus") }
-    var selectedColorHex by remember { mutableStateOf("#10B981") }
-    var selectedIconType by remember { mutableStateOf("book") }
+    // Step 1: Apps
+    val selectedAppPackages = remember { mutableStateListOf<String>() }
 
-    // Step 2: Time State
-    var startTime by remember { mutableStateOf("08:00 PM") }
-    var endTime by remember { mutableStateOf("11:00 PM") }
-    var durationText by remember { mutableStateOf("3h") }
-
-    // Step 3: Days State
+    // Step 2: Time & Days
+    var startTime by remember { mutableStateOf("09:00 AM") }
+    var endTime by remember { mutableStateOf("11:00 AM") }
     val dayLabels = listOf("রবি", "সোম", "মঙ্গল", "বুধ", "বৃহ", "শুক্র", "শনি")
     val selectedDays = remember { mutableStateListOf("সোম", "মঙ্গল", "বুধ", "বৃহ", "শুক্র") }
 
-    // Step 4: Block Rules State
-    val availableAppCategories = listOf(
-        "Social Media (Facebook, Instagram, X)",
-        "Shorts & Video (YouTube, TikTok)",
-        "Games (Gaming Apps)",
-        "Messaging Apps",
-        "Shopping & E-commerce"
-    )
-    val selectedAppCategories = remember {
-        mutableStateListOf(
-            "Social Media (Facebook, Instagram, X)",
-            "Shorts & Video (YouTube, TikTok)"
-        )
-    }
+    // Step 3: Settings
+    var routineName by remember { mutableStateOf("My Schedule") }
+    var selectedColorHex by remember { mutableStateOf("#10B981") }
+    var selectedIconType by remember { mutableStateOf("book") }
     var blockShorts by remember { mutableStateOf(true) }
     var blockWebsites by remember { mutableStateOf(true) }
     var isStrict by remember { mutableStateOf(true) }
+
+    fun calculateDuration(start: String, end: String): String {
+        try {
+            val format = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.ENGLISH)
+            val sTime = format.parse(start)
+            var eTime = format.parse(end)
+            if (sTime != null && eTime != null) {
+                if (eTime.before(sTime)) {
+                    eTime = java.util.Date(eTime.time + 24 * 60 * 60 * 1000)
+                }
+                val diffMs = eTime.time - sTime.time
+                val diffHours = diffMs / (1000 * 60 * 60)
+                val diffMinutes = (diffMs / (1000 * 60)) % 60
+                return if (diffMinutes > 0) "${diffHours}h ${diffMinutes}m" else "${diffHours}h"
+            }
+        } catch (e: Exception) {}
+        return "Custom"
+    }
+
+    val durationText = calculateDuration(startTime, endTime)
 
     fun saveRoutine() {
         val daysString = if (selectedDays.size == 7) {
@@ -124,13 +93,18 @@ fun CreateRoutineScreen(
             selectedDays.joinToString(", ")
         }
 
-        val appsSummary = if (selectedAppCategories.size >= 2) {
-            "Social & Video Apps"
-        } else if (selectedAppCategories.isNotEmpty()) {
-            selectedAppCategories.first().substringBefore(" (")
+        val appsSummary = if (selectedAppPackages.size > 2) {
+            "${selectedAppPackages.size} Apps"
+        } else if (selectedAppPackages.isNotEmpty()) {
+            val pkg = selectedAppPackages.first()
+            val app = viewModel.installedApps.find { it.packageName == pkg }
+            app?.name ?: "Apps"
         } else {
             "All Distractions"
         }
+
+        // We save the JSON of packages so it can be used for actual blocking later
+        val packagesJson = org.json.JSONArray(selectedAppPackages).toString()
 
         val newRoutine = FocusRoutine(
             id = System.currentTimeMillis().toString(),
@@ -178,27 +152,25 @@ fun CreateRoutineScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = "পেছনে",
                     tint = colors.textPrimary
                 )
             }
-
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = com.example.util.LocalAppStrings.current.routineCreateTitle,
+                    text = "নতুন রুটিন তৈরি",
                     color = colors.textPrimary,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = com.example.util.LocalAppStrings.current.routineCreateSubtitle,
+                    text = "ধাপ $currentStep / 4",
                     color = colors.textSecondary,
                     fontSize = 11.sp
                 )
             }
-
             Text(
-                text = "Save",
+                text = "সেভ",
                 color = colors.primary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
@@ -211,12 +183,11 @@ fun CreateRoutineScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // --- 5-Step Visual Stepper Bar ---
-        RoutineStepperBar(currentStep = currentStep)
+        // --- Roadmap Progress Indicator (1)---(2)---(3)---(4) ---
+        RoutineStepperBar(currentStep = currentStep, totalSteps = 4)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- Step Body with Animated Transition ---
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -237,67 +208,63 @@ fun CreateRoutineScreen(
                 },
                 label = "step_transition"
             ) { step ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    when (step) {
-                        1 -> StepBasics(
-                            routineName = routineName,
-                            onNameChange = { routineName = it },
-                            selectedColorHex = selectedColorHex,
-                            onColorChange = { selectedColorHex = it },
-                            selectedIconType = selectedIconType,
-                            onIconChange = { selectedIconType = it },
-                            onNext = { currentStep = 2 }
-                        )
-
-                        2 -> StepTime(
-                            startTime = startTime,
-                            onStartTimeChange = { startTime = it },
-                            endTime = endTime,
-                            onEndTimeChange = { endTime = it },
-                            durationText = durationText,
-                            onDurationChange = { durationText = it },
-                            onBack = { currentStep = 1 },
-                            onNext = { currentStep = 3 }
-                        )
-
-                        3 -> StepDays(
-                            dayLabels = dayLabels,
-                            selectedDays = selectedDays,
-                            onBack = { currentStep = 2 },
-                            onNext = { currentStep = 4 }
-                        )
-
-                        4 -> StepBlockRules(
-                            availableAppCategories = availableAppCategories,
-                            selectedAppCategories = selectedAppCategories,
-                            blockShorts = blockShorts,
-                            onBlockShortsChange = { blockShorts = it },
-                            blockWebsites = blockWebsites,
-                            onBlockWebsitesChange = { blockWebsites = it },
-                            isStrict = isStrict,
-                            onStrictChange = { isStrict = it },
-                            onBack = { currentStep = 3 },
-                            onNext = { currentStep = 5 }
-                        )
-
-                        5 -> StepReview(
-                            routineName = routineName,
-                            colorHex = selectedColorHex,
-                            iconType = selectedIconType,
-                            timeRange = "$startTime – $endTime",
-                            durationText = durationText,
-                            selectedDays = selectedDays,
-                            selectedApps = selectedAppCategories,
-                            blockShorts = blockShorts,
-                            blockWebsites = blockWebsites,
-                            isStrict = isStrict,
-                            onBack = { currentStep = 4 },
-                            onSave = { saveRoutine() }
-                        )
+                if (step == 1) {
+                    // Step 1 uses LazyColumn internally to fill height properly
+                    StepAppSelection(
+                        viewModel = viewModel,
+                        selectedAppPackages = selectedAppPackages,
+                        onBack = onBack,
+                        onNext = { currentStep = 2 }
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        when (step) {
+                            2 -> StepTimeAndDays(
+                                context = context,
+                                startTime = startTime,
+                                onStartTimeChange = { startTime = it },
+                                endTime = endTime,
+                                onEndTimeChange = { endTime = it },
+                                dayLabels = dayLabels,
+                                selectedDays = selectedDays,
+                                onBack = { currentStep = 1 },
+                                onNext = { currentStep = 3 }
+                            )
+                            3 -> StepSettings(
+                                routineName = routineName,
+                                onNameChange = { routineName = it },
+                                selectedColorHex = selectedColorHex,
+                                onColorChange = { selectedColorHex = it },
+                                selectedIconType = selectedIconType,
+                                onIconChange = { selectedIconType = it },
+                                blockShorts = blockShorts,
+                                onBlockShortsChange = { blockShorts = it },
+                                blockWebsites = blockWebsites,
+                                onBlockWebsitesChange = { blockWebsites = it },
+                                isStrict = isStrict,
+                                onStrictChange = { isStrict = it },
+                                onBack = { currentStep = 2 },
+                                onNext = { currentStep = 4 }
+                            )
+                            4 -> StepReview(
+                                routineName = routineName,
+                                colorHex = selectedColorHex,
+                                iconType = selectedIconType,
+                                timeRange = "$startTime – $endTime",
+                                durationText = durationText,
+                                selectedDays = selectedDays,
+                                selectedAppPackages = selectedAppPackages,
+                                blockShorts = blockShorts,
+                                blockWebsites = blockWebsites,
+                                isStrict = isStrict,
+                                onBack = { currentStep = 3 },
+                                onSave = { saveRoutine() }
+                            )
+                        }
                     }
                 }
             }
@@ -306,602 +273,344 @@ fun CreateRoutineScreen(
 }
 
 @Composable
-private fun RoutineStepperBar(currentStep: Int) {
+fun RoutineStepperBar(currentStep: Int, totalSteps: Int) {
     val colors = AppTheme.colors
-    val stepTitles = listOf("Basics", "Time", "Days", "Block", "Review")
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        stepTitles.forEachIndexed { index, title ->
-            val stepNumber = index + 1
-            val isCompleted = stepNumber < currentStep
-            val isActive = stepNumber == currentStep
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(56.dp)
+        for (i in 1..totalSteps) {
+            val isActive = i <= currentStep
+            val isCompleted = i < currentStep
+            
+            // Circle
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(if (isActive) colors.primary else colors.surfaceElevated)
+                    .border(1.dp, if (isActive) colors.primary else colors.border, CircleShape),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when {
-                                isActive -> colors.primary
-                                isCompleted -> colors.primary.copy(alpha = 0.2f)
-                                else -> colors.surfaceElevated
-                            }
-                        )
-                        .border(
-                            1.dp,
-                            when {
-                                isActive -> colors.primary
-                                isCompleted -> colors.primary
-                                else -> colors.border
-                            },
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isCompleted) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Done",
-                            tint = colors.primaryBright,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    } else {
-                        Text(
-                            text = stepNumber.toString(),
-                            color = if (isActive) (if (colors.isDark) Color(0xFF0B0E14) else Color.White) else colors.textSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                if (isCompleted) {
+                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                } else {
+                    Text(text = when(i) { 1 -> "১"; 2 -> "২"; 3 -> "৩"; 4 -> "৪"; else -> i.toString() }, color = if (isActive) Color.White else colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = title,
-                    color = if (isActive) colors.primaryBright else colors.textMuted,
-                    fontSize = 10.sp,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                )
             }
-
-            if (index < stepTitles.size - 1) {
+            
+            // Connecting Line
+            if (i < totalSteps) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(2.dp)
-                        .background(if (stepNumber < currentStep) colors.primary else colors.border)
-                        .padding(horizontal = 2.dp)
+                        .padding(horizontal = 4.dp)
+                        .background(if (isCompleted) colors.primary else colors.border)
                 )
             }
         }
     }
 }
 
-/* ================= STEP 1: BASICS ================= */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StepBasics(
-    routineName: String,
-    onNameChange: (String) -> Unit,
-    selectedColorHex: String,
-    onColorChange: (String) -> Unit,
-    selectedIconType: String,
-    onIconChange: (String) -> Unit,
-    onNext: () -> Unit
+fun ThemeTimePickerDialog(
+    initialTime: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
 ) {
     val colors = AppTheme.colors
+    
+    var initHour = 9
+    var initMinute = 0
+    try {
+        val format = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.ENGLISH)
+        val date = format.parse(initialTime)
+        if (date != null) {
+            val cal = Calendar.getInstance()
+            cal.time = date
+            initHour = cal.get(Calendar.HOUR_OF_DAY)
+            initMinute = cal.get(Calendar.MINUTE)
+        }
+    } catch (e: Exception) {}
 
-    val colorOptions = listOf(
-        "#10B981", // Emerald
-        "#8B5CF6", // Purple
-        "#3B82F6", // Blue
-        "#F59E0B", // Orange
-        "#EF4444", // Coral Pink
-        "#06B6D4"  // Teal Cyan
+    val timePickerState = rememberTimePickerState(
+        initialHour = initHour,
+        initialMinute = initMinute,
+        is24Hour = false
     )
 
-    val iconOptions = listOf(
-        Pair("book", Icons.Default.Book),
-        Pair("briefcase", Icons.Default.Work),
-        Pair("laptop", Icons.Default.Computer),
-        Pair("person", Icons.Default.Person),
-        Pair("moon", Icons.Default.Nightlight),
-        Pair("game", Icons.Default.SportsEsports),
-        Pair("fitness", Icons.Default.FitnessCenter),
-        Pair("shield", Icons.Default.Shield)
-    )
-
-    val quickNames = listOf("Study Focus", "Deep Work", "Night Detox", "Personal Time", "Reading Sprint")
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(18.dp)
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        // Name Section
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Routine Name",
-                color = colors.textPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "${routineName.length}/20",
-                color = colors.textMuted,
-                fontSize = 11.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = routineName,
-            onValueChange = { if (it.length <= 20) onNameChange(it) },
-            leadingIcon = {
-                Icon(
-                    imageVector = getRoutineIconVector(selectedIconType),
-                    contentDescription = null,
-                    tint = parseRoutineColor(selectedColorHex),
-                    modifier = Modifier.size(20.dp)
-                )
-            },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = parseRoutineColor(selectedColorHex),
-                unfocusedBorderColor = colors.border,
-                focusedTextColor = colors.textPrimary,
-                unfocusedTextColor = colors.textPrimary,
-                focusedContainerColor = colors.surfaceElevated,
-                unfocusedContainerColor = colors.surfaceElevated
-            ),
-            shape = RoundedCornerShape(12.dp),
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .testTag("input_routine_name_step1")
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Quick suggestions
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(16.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.surface)
+                .padding(24.dp)
         ) {
-            quickNames.forEach { name ->
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (routineName == name) parseRoutineColor(selectedColorHex).copy(alpha = 0.15f) else colors.surfaceElevated)
-                        .border(1.dp, if (routineName == name) parseRoutineColor(selectedColorHex) else colors.border, RoundedCornerShape(8.dp))
-                        .clickable { onNameChange(name) }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = name,
-                        color = if (routineName == name) parseRoutineColor(selectedColorHex) else colors.textSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "সময় নির্বাচন করুন",
+                    color = colors.textPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Material 3 TimePicker inherits colors from MaterialTheme.
+                // We wrap it in a MaterialTheme that matches our custom colors.
+                MaterialTheme(
+                    colorScheme = MaterialTheme.colorScheme.copy(
+                        primary = colors.primary,
+                        onPrimary = Color.White,
+                        surface = colors.surface,
+                        onSurface = colors.textPrimary,
+                        surfaceVariant = colors.surfaceElevated,
+                        onSurfaceVariant = colors.textSecondary,
+                        tertiary = colors.primaryBright,
+                        outline = colors.border
                     )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Color Picker
-        Text(
-            text = "Routine Color",
-            color = colors.textPrimary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            colorOptions.forEach { hex ->
-                val c = parseRoutineColor(hex)
-                val isSelected = selectedColorHex.equals(hex, ignoreCase = true)
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(c)
-                        .border(
-                            if (isSelected) 3.dp else 1.dp,
-                            if (isSelected) (if (colors.isDark) Color.White else Color(0xFF0F172A)) else Color.Transparent,
-                            CircleShape
-                        )
-                        .clickable { onColorChange(hex) },
-                    contentAlignment = Alignment.Center
                 ) {
-                    if (isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                        )
+                    TimePicker(state = timePickerState)
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "বাতিল", color = colors.textSecondary)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val h = timePickerState.hour
+                            val m = timePickerState.minute
+                            val amPm = if (h >= 12) "PM" else "AM"
+                            val h12 = if (h % 12 == 0) 12 else h % 12
+                            val formatted = String.format(java.util.Locale.ENGLISH, "%02d:%02d %s", h12, m, amPm)
+                            onConfirm(formatted)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                    ) {
+                        Text(text = "সংরক্ষণ করুন", color = Color.White)
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Icon Picker
-        Text(
-            text = "Routine Icon",
-            color = colors.textPrimary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            iconOptions.take(5).forEach { (type, iconVec) ->
-                val isSelected = selectedIconType == type
-                val themeCol = parseRoutineColor(selectedColorHex)
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) themeCol.copy(alpha = 0.15f) else colors.surfaceElevated)
-                        .border(
-                            1.5.dp,
-                            if (isSelected) themeCol else colors.border,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickable { onIconChange(type) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = iconVec,
-                        contentDescription = type,
-                        tint = if (isSelected) themeCol else colors.textSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Info Callout Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(colors.primary.copy(alpha = 0.08f))
-                .border(1.dp, colors.primary.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
-                .padding(14.dp)
-        ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    imageVector = Icons.Default.Shield,
-                    contentDescription = null,
-                    tint = colors.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = "This routine will help you stay focused",
-                        color = colors.textPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "We will block distractions so you can focus on what really matters.",
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        lineHeight = 14.sp
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(22.dp))
-
-        // Next Button
-        Button(
-            onClick = onNext,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = parseRoutineColor(selectedColorHex),
-                contentColor = Color.White
-            ),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .testTag("btn_next_step1")
-        ) {
-            Text(text = "Next: Set Time", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Spacer(modifier = Modifier.width(6.dp))
-            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
-        }
     }
 }
 
-/* ================= STEP 2: TIME ================= */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StepTime(
-    startTime: String,
-    onStartTimeChange: (String) -> Unit,
-    endTime: String,
-    onEndTimeChange: (String) -> Unit,
-    durationText: String,
-    onDurationChange: (String) -> Unit,
+private fun StepAppSelection(
+    viewModel: FocusViewModel,
+    selectedAppPackages: MutableList<String>,
     onBack: () -> Unit,
     onNext: () -> Unit
 ) {
     val colors = AppTheme.colors
+    LaunchedEffect(Unit) {
+        viewModel.loadInstalledApps()
+    }
+    
+    var currentTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("সমস্ত অ্যাপ", "সোশ্যাল মিডিয়া", "শর্ট ভিডিও")
+    
+    val socialMediaKeywords = listOf("facebook", "instagram", "twitter", "snapchat", "linkedin", "pinterest", "threads", "messenger", "whatsapp", "telegram", "discord", "imo", "viber")
+    val shortVideoKeywords = listOf("tiktok", "kwai", "likee", "youtube", "vimeo", "mxtech", "bilibili")
+    
+    val filteredApps = viewModel.installedApps.filter { app ->
+        val pkg = app.packageName.lowercase()
+        when (currentTab) {
+            0 -> true
+            1 -> socialMediaKeywords.any { pkg.contains(it) }
+            2 -> shortVideoKeywords.any { pkg.contains(it) }
+            else -> true
+        }
+    }
 
-    val presetTimeBlocks = listOf(
-        Triple("সকাল (Morning)", "09:00 AM", "01:00 PM"),
-        Triple("দুপুর (Afternoon)", "02:00 PM", "05:00 PM"),
-        Triple("রাত (Study)", "08:00 PM", "11:00 PM"),
-        Triple("ঘুম (Sleep)", "11:00 PM", "06:00 AM")
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(18.dp)
-    ) {
-        Text(
-            text = com.example.util.LocalAppStrings.current.routineTimeLabel,
-            color = colors.textPrimary,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = com.example.util.LocalAppStrings.current.routineTimeDesc,
-            color = colors.textSecondary,
-            fontSize = 11.sp
-        )
-
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(text = "ধাপ ১: অ্যাপ নির্বাচন", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(text = "যে অ্যাপগুলো ব্লক করতে চান সেগুলো নির্বাচন করুন।", color = colors.textSecondary, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Time Input Pickers
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = com.example.util.LocalAppStrings.current.routineStartTime, color = colors.textSecondary, fontSize = 12.sp)
-                Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = startTime,
-                    onValueChange = onStartTimeChange,
-                    leadingIcon = {
-                        Icon(Icons.Default.Schedule, contentDescription = null, tint = colors.primary, modifier = Modifier.size(16.dp))
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.primary,
-                        unfocusedBorderColor = colors.border,
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary,
-                        focusedContainerColor = colors.surfaceElevated,
-                        unfocusedContainerColor = colors.surfaceElevated
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+        
+        ScrollableTabRow(
+            selectedTabIndex = currentTab,
+            containerColor = Color.Transparent,
+            contentColor = colors.primary,
+            edgePadding = 0.dp,
+            indicator = { tabPositions ->
+                SecondaryIndicator(
+                    Modifier.tabIndicatorOffset(tabPositions[currentTab]),
+                    color = colors.primary
                 )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = com.example.util.LocalAppStrings.current.routineEndTime, color = colors.textSecondary, fontSize = 12.sp)
-                Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = endTime,
-                    onValueChange = onEndTimeChange,
-                    leadingIcon = {
-                        Icon(Icons.Default.Schedule, contentDescription = null, tint = colors.secondary, modifier = Modifier.size(16.dp))
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.primary,
-                        unfocusedBorderColor = colors.border,
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary,
-                        focusedContainerColor = colors.surfaceElevated,
-                        unfocusedContainerColor = colors.surfaceElevated
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+            },
+            divider = {}
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = currentTab == index,
+                    onClick = { currentTab = index },
+                    text = { Text(text = title, fontSize = 13.sp, fontWeight = if (currentTab == index) FontWeight.Bold else FontWeight.Normal) },
+                    selectedContentColor = colors.primary,
+                    unselectedContentColor = colors.textSecondary
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Duration Info Chip
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(colors.primary.copy(alpha = 0.1f))
-                .border(1.dp, colors.primary.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        if (!viewModel.isAppsLoaded) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = colors.primary)
+            }
+        } else if (filteredApps.isEmpty()) {
+             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text("এই ক্যাটাগরিতে কোনো অ্যাপ নেই", color = colors.textSecondary)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(text = com.example.util.LocalAppStrings.current.routineProtectedTime, color = colors.textSecondary, fontSize = 12.sp)
-                Text(
-                    text = "$durationText ${com.example.util.LocalAppStrings.current.routineProtectedTimeDesc}",
-                    color = colors.primaryBright,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Quick Preset Slots
-        Text(text = com.example.util.LocalAppStrings.current.routineQuickPreset, color = colors.textMuted, fontSize = 11.sp)
-        Spacer(modifier = Modifier.height(6.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            presetTimeBlocks.forEach { (label, s, e) ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surfaceElevated)
-                        .border(1.dp, colors.borderLight, RoundedCornerShape(10.dp))
-                        .clickable {
-                            onStartTimeChange(s)
-                            onEndTimeChange(e)
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
+                items(filteredApps, key = { it.packageName }) { app ->
+                    val isChecked = selectedAppPackages.contains(app.packageName)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.surfaceElevated)
+                            .clickable {
+                                if (isChecked) selectedAppPackages.remove(app.packageName)
+                                else selectedAppPackages.add(app.packageName)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = label, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        Text(text = "$s – $e", color = colors.primaryBright, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        AsyncImage(
+                            model = app.icon,
+                            contentDescription = app.name,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = app.name, color = colors.textPrimary, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Checkbox(
+                            checked = isChecked,
+                            onCheckedChange = null,
+                            colors = CheckboxDefaults.colors(checkedColor = colors.primary)
+                        )
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(22.dp))
-
-        // Navigation
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onNext,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
         ) {
-            OutlinedButton(
-                onClick = onBack,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(text = "Back", color = colors.textSecondary)
-            }
-
-            Button(
-                onClick = onNext,
-                colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1.5f)
-            ) {
-                Text(text = "Next: Select Days", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
+            Text(text = "পরবর্তী ধাপ", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
     }
 }
 
-/* ================= STEP 3: DAYS ================= */
 @Composable
-private fun StepDays(
+private fun StepTimeAndDays(
+    context: Context,
+    startTime: String,
+    onStartTimeChange: (String) -> Unit,
+    endTime: String,
+    onEndTimeChange: (String) -> Unit,
     dayLabels: List<String>,
     selectedDays: MutableList<String>,
     onBack: () -> Unit,
     onNext: () -> Unit
 ) {
     val colors = AppTheme.colors
+    var showStartPicker by remember { mutableStateOf(false) }
+    var showEndPicker by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(18.dp)
-    ) {
+    if (showStartPicker) {
+        ThemeTimePickerDialog(
+            initialTime = startTime,
+            onDismiss = { showStartPicker = false },
+            onConfirm = { 
+                onStartTimeChange(it)
+                showStartPicker = false 
+            }
+        )
+    }
+
+    if (showEndPicker) {
+        ThemeTimePickerDialog(
+            initialTime = endTime,
+            onDismiss = { showEndPicker = false },
+            onConfirm = { 
+                onEndTimeChange(it)
+                showEndPicker = false 
+            }
+        )
+    }
+
+    Column {
         Text(
-            text = com.example.util.LocalAppStrings.current.routineRepeatDays,
+            text = "ধাপ ২: সময় ও দিন",
             color = colors.textPrimary,
-            fontSize = 15.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = com.example.util.LocalAppStrings.current.routineRepeatDaysDesc,
+            text = "কখন এই রুটিনটি চালু হবে তা সেট করুন।",
             color = colors.textSecondary,
-            fontSize = 11.sp
+            fontSize = 12.sp
         )
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Quick Preset Buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.surfaceElevated)
-                    .border(1.dp, colors.border, RoundedCornerShape(10.dp))
-                    .clickable {
-                        selectedDays.clear()
-                        selectedDays.addAll(dayLabels)
-                    }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = com.example.util.LocalAppStrings.current.routineAllDays, color = colors.primaryBright, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        // Time Pickers
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "শুরু", color = colors.textSecondary, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surfaceElevated)
+                        .clickable { showStartPicker = true }
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = startTime, color = colors.primaryBright, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
             }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.surfaceElevated)
-                    .border(1.dp, colors.border, RoundedCornerShape(10.dp))
-                    .clickable {
-                        selectedDays.clear()
-                        selectedDays.addAll(listOf("সোম", "মঙ্গল", "বুধ", "বৃহ", "শুক্র"))
-                    }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = com.example.util.LocalAppStrings.current.routineWeekdays, color = colors.primaryBright, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "শেষ", color = colors.textSecondary, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surfaceElevated)
+                        .clickable { showEndPicker = true }
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = endTime, color = colors.primaryBright, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(text = "সক্রিয় দিনসমূহ", color = colors.textSecondary, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Day Selector Pills
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -913,11 +622,7 @@ private fun StepDays(
                         .size(42.dp)
                         .clip(CircleShape)
                         .background(if (isSelected) colors.primary else colors.surfaceElevated)
-                        .border(
-                            1.dp,
-                            if (isSelected) colors.primary else colors.border,
-                            CircleShape
-                        )
+                        .border(1.dp, if (isSelected) colors.primary else colors.border, CircleShape)
                         .clickable {
                             if (isSelected) selectedDays.remove(day)
                             else selectedDays.add(day)
@@ -926,7 +631,7 @@ private fun StepDays(
                 ) {
                     Text(
                         text = day,
-                        color = if (isSelected) (if (colors.isDark) Color(0xFF0B0E14) else Color.White) else colors.textSecondary,
+                        color = if (isSelected) Color.White else colors.textSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -935,37 +640,26 @@ private fun StepDays(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-
-        // Navigation
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedButton(
-                onClick = onBack,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(text = "Back", color = colors.textSecondary)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
+                Text(text = "পেছনে", color = colors.textSecondary)
             }
-
-            Button(
-                onClick = onNext,
-                colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1.5f)
-            ) {
-                Text(text = "Next: Block Rules", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Button(onClick = onNext, modifier = Modifier.weight(1.5f), colors = ButtonDefaults.buttonColors(containerColor = colors.primary)) {
+                Text(text = "পরবর্তী ধাপ", color = Color.White)
             }
         }
     }
 }
 
-/* ================= STEP 4: BLOCK RULES ================= */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StepBlockRules(
-    availableAppCategories: List<String>,
-    selectedAppCategories: MutableList<String>,
+private fun StepSettings(
+    routineName: String,
+    onNameChange: (String) -> Unit,
+    selectedColorHex: String,
+    onColorChange: (String) -> Unit,
+    selectedIconType: String,
+    onIconChange: (String) -> Unit,
     blockShorts: Boolean,
     onBlockShortsChange: (Boolean) -> Unit,
     blockWebsites: Boolean,
@@ -976,148 +670,99 @@ private fun StepBlockRules(
     onNext: () -> Unit
 ) {
     val colors = AppTheme.colors
+    val routineColors = listOf("#10B981", "#3B82F6", "#8B5CF6", "#F43F5E", "#F59E0B", "#14B8A6")
+    val routineIcons = listOf("book", "briefcase", "laptop", "person", "moon", "shield", "game")
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(18.dp)
-    ) {
-        Text(
-            text = com.example.util.LocalAppStrings.current.routineBlockingFilter,
-            color = colors.textPrimary,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = com.example.util.LocalAppStrings.current.routineBlockingFilterDesc,
-            color = colors.textSecondary,
-            fontSize = 11.sp
+    Column {
+        Text(text = "ধাপ ৩: কাস্টমাইজেশন ও রুলস", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = routineName,
+            onValueChange = onNameChange,
+            label = { Text("রুটিনের নাম") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.primary,
+                focusedLabelColor = colors.primary
+            ),
+            singleLine = true
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // App Categories
-        Text(text = com.example.util.LocalAppStrings.current.routineTargetCategory, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            availableAppCategories.forEach { category ->
-                val isChecked = selectedAppCategories.contains(category)
-                Row(
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = "থিম কালার", color = colors.textSecondary, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            routineColors.forEach { hex ->
+                val color = parseRoutineColor(hex)
+                val isSelected = selectedColorHex == hex
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            if (isChecked) selectedAppCategories.remove(category)
-                            else selectedAppCategories.add(category)
-                        }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .border(if (isSelected) 3.dp else 0.dp, if (isSelected) colors.textPrimary else Color.Transparent, CircleShape)
+                        .clickable { onColorChange(hex) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = "আইকন", color = colors.textSecondary, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            routineIcons.forEach { type ->
+                val isSelected = selectedIconType == type
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSelected) colors.primary.copy(alpha = 0.2f) else colors.surfaceElevated)
+                        .border(1.dp, if (isSelected) colors.primary else colors.border, RoundedCornerShape(12.dp))
+                        .clickable { onIconChange(type) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Checkbox(
-                        checked = isChecked,
-                        onCheckedChange = {
-                            if (it) selectedAppCategories.add(category)
-                            else selectedAppCategories.remove(category)
-                        },
-                        colors = CheckboxDefaults.colors(checkedColor = colors.primary)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = category, color = colors.textPrimary, fontSize = 12.sp)
+                    Icon(imageVector = getRoutineIconVector(type), contentDescription = null, tint = if (isSelected) colors.primary else colors.textSecondary)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-        HorizontalDivider(color = colors.border, thickness = 1.dp)
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Block Shorts & Reels Switch
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = com.example.util.LocalAppStrings.current.routineShortsBlocking, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(text = com.example.util.LocalAppStrings.current.routineShortsBlockingDesc, color = colors.textSecondary, fontSize = 10.sp)
-            }
-            Switch(
-                checked = blockShorts,
-                onCheckedChange = onBlockShortsChange,
-                colors = SwitchDefaults.colors(checkedTrackColor = colors.primary)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Block Custom Websites Switch
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = com.example.util.LocalAppStrings.current.routineWebBlocking, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(text = com.example.util.LocalAppStrings.current.routineWebBlockingDesc, color = colors.textSecondary, fontSize = 10.sp)
-            }
-            Switch(
-                checked = blockWebsites,
-                onCheckedChange = onBlockWebsitesChange,
-                colors = SwitchDefaults.colors(checkedTrackColor = colors.primary)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Strict Protection Mode Switch
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = com.example.util.LocalAppStrings.current.routineStrictMode, color = colors.alert, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text(text = com.example.util.LocalAppStrings.current.routineStrictModeDesc, color = colors.textSecondary, fontSize = 10.sp)
-            }
-            Switch(
-                checked = isStrict,
-                onCheckedChange = onStrictChange,
-                colors = SwitchDefaults.colors(checkedTrackColor = colors.alert)
-            )
-        }
-
         Spacer(modifier = Modifier.height(20.dp))
+        HorizontalDivider(color = colors.borderLight)
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Navigation
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedButton(
-                onClick = onBack,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(text = "Back", color = colors.textSecondary)
+        // Switches
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Block YouTube Shorts & Reels", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
+            Switch(checked = blockShorts, onCheckedChange = onBlockShortsChange, colors = SwitchDefaults.colors(checkedTrackColor = colors.primary))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Block Distracting Websites", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Switch(checked = blockWebsites, onCheckedChange = onBlockWebsitesChange, colors = SwitchDefaults.colors(checkedTrackColor = colors.primary))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Strict Mode (Hard to bypass)", color = colors.alert, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Switch(checked = isStrict, onCheckedChange = onStrictChange, colors = SwitchDefaults.colors(checkedTrackColor = colors.alert))
+        }
 
-            Button(
-                onClick = onNext,
-                colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1.5f)
-            ) {
-                Text(text = "Next: Review & Save", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
+                Text(text = "পেছনে", color = colors.textSecondary)
+            }
+            Button(onClick = onNext, modifier = Modifier.weight(1.5f), colors = ButtonDefaults.buttonColors(containerColor = colors.primary)) {
+                Text(text = "রিভিউ করুন", color = Color.White)
             }
         }
     }
 }
 
-/* ================= STEP 5: REVIEW ================= */
 @Composable
 private fun StepReview(
     routineName: String,
@@ -1126,7 +771,7 @@ private fun StepReview(
     timeRange: String,
     durationText: String,
     selectedDays: List<String>,
-    selectedApps: List<String>,
+    selectedAppPackages: List<String>,
     blockShorts: Boolean,
     blockWebsites: Boolean,
     isStrict: Boolean,
@@ -1135,30 +780,11 @@ private fun StepReview(
 ) {
     val colors = AppTheme.colors
     val themeColor = parseRoutineColor(colorHex)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(18.dp)
-    ) {
-        Text(
-            text = com.example.util.LocalAppStrings.current.routineSummaryTitle,
-            color = colors.textPrimary,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = com.example.util.LocalAppStrings.current.routineSummaryDesc,
-            color = colors.textSecondary,
-            fontSize = 11.sp
-        )
-
+    Column {
+        Text(text = "ধাপ ৪: সেভ ও রিভিউ", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(text = "রুটিনের সেটিংস যাচাই করুন", color = colors.textSecondary, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Review Preview Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1176,103 +802,47 @@ private fun StepReview(
                             .background(themeColor.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = getRoutineIconVector(iconType),
-                            contentDescription = null,
-                            tint = themeColor,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(imageVector = getRoutineIconVector(iconType), contentDescription = null, tint = themeColor)
                     }
-
                     Spacer(modifier = Modifier.width(12.dp))
-
                     Column {
-                        Text(
-                            text = routineName,
-                            color = colors.textPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "$timeRange • $durationText",
-                            color = themeColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Text(text = routineName, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "$timeRange • $durationText", color = themeColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-
                 HorizontalDivider(color = colors.border, thickness = 1.dp)
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = com.example.util.LocalAppStrings.current.routineActiveDays, color = colors.textSecondary, fontSize = 12.sp)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(text = "Active Days:", color = colors.textSecondary, fontSize = 12.sp)
                     Text(text = selectedDays.joinToString(", "), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = com.example.util.LocalAppStrings.current.routineBlockedApps, color = colors.textSecondary, fontSize = 12.sp)
-                    Text(text = "${selectedApps.size} ${com.example.util.LocalAppStrings.current.routineCategoryCount}", color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(text = "Apps Blocked:", color = colors.textSecondary, fontSize = 12.sp)
+                    Text(text = "${selectedAppPackages.size} Apps", color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(text = "Shorts & Websites:", color = colors.textSecondary, fontSize = 12.sp)
-                    Text(text = if (blockShorts && blockWebsites) com.example.util.LocalAppStrings.current.routineCustomFilter else com.example.util.LocalAppStrings.current.routineCustomFilter, color = colors.primaryBright, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(text = if (blockShorts && blockWebsites) "Active" else "Custom", color = colors.primaryBright, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = com.example.util.LocalAppStrings.current.routineProtectionMode, color = colors.textSecondary, fontSize = 12.sp)
-                    Text(
-                        text = if (isStrict) com.example.util.LocalAppStrings.current.routineStrictLabel else com.example.util.LocalAppStrings.current.routineStandardLabel,
-                        color = if (isStrict) colors.alert else colors.primary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(text = "Protection Mode:", color = colors.textSecondary, fontSize = 12.sp)
+                    Text(text = if (isStrict) "Strict" else "Standard", color = if (isStrict) colors.alert else colors.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Save CTA
+        Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = onSave,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = themeColor,
-                contentColor = Color.White
-            ),
+            colors = ButtonDefaults.buttonColors(containerColor = themeColor, contentColor = Color.White),
             shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .testTag("btn_save_and_activate_routine")
+            modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
             Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text(text = "Create & Activate Routine", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(text = "রুটিন তৈরি ও চালু করুন", fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
-
         Spacer(modifier = Modifier.height(10.dp))
-
-        OutlinedButton(
-            onClick = onBack,
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-        ) {
-            Text(text = com.example.util.LocalAppStrings.current.routineEditSave, color = colors.textSecondary, fontSize = 12.sp)
+        OutlinedButton(onClick = onBack, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().height(44.dp)) {
+            Text(text = "এডিট করুন", color = colors.textSecondary, fontSize = 12.sp)
         }
     }
 }

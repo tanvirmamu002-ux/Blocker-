@@ -60,6 +60,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,12 +89,22 @@ fun SecurityScreen(
     val colors = AppTheme.colors
     var showForgotPinDialog by remember { mutableStateOf(false) }
     val strings = com.example.util.LocalAppStrings.current
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(viewModel.scrollToPermissionsRequested) {
+        if (viewModel.scrollToPermissionsRequested) {
+            // Wait briefly to allow layout to settle, then scroll to the bottom/permissions section
+            kotlinx.coroutines.delay(300)
+            scrollState.animateScrollTo(scrollState.maxValue)
+            viewModel.scrollToPermissionsRequested = false
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 24.dp, vertical = 12.dp)
     ) {
         // Page Title Header (Clean, gear icon removed)
@@ -121,34 +132,18 @@ fun SecurityScreen(
         val context = androidx.compose.ui.platform.LocalContext.current
 
         // ==========================================
-        // 1. COMPACT & MODERN THEME SELECTOR
+        // 1. UNIFIED COMPACT QUICK SETTINGS (Theme, Language, PIN in 3 Lines)
         // ==========================================
-        ThemeSelectionCard(
-            currentTheme = viewModel.appThemeMode,
-            onThemeSelected = { viewModel.setAppTheme(it) }
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // ==========================================
-        // 1.5 LANGUAGE SELECTOR
-        // ==========================================
-        LanguageSelectionCard(
-            currentLanguage = viewModel.appLanguage,
-            onLanguageSelected = { viewModel.updateLanguage(context, it) }
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // ==========================================
-        // 2. PIN CREATION & RESET SECTION
-        // ==========================================
-        PinManagementCard(
+        UnifiedQuickSettingsCard(
             viewModel = viewModel,
-            onCreatePin = { viewModel.showPinBottomSheet(FocusViewModel.PinAction.CREATE_PIN) },
-            onChangePin = { viewModel.showPinBottomSheet(FocusViewModel.PinAction.CHANGE_PIN) },
-            onResetPin = { viewModel.showPinBottomSheet(FocusViewModel.PinAction.RESET_PIN) },
-            onForgotPin = { showForgotPinDialog = true }
+            currentTheme = viewModel.appThemeMode,
+            onThemeSelected = { viewModel.setAppTheme(it) },
+            currentLanguage = viewModel.appLanguage,
+            onLanguageSelected = { viewModel.updateLanguage(context, it) },
+            onPinAction = {
+                val action = if (viewModel.isPinConfigured) FocusViewModel.PinAction.CHANGE_PIN else FocusViewModel.PinAction.CREATE_PIN
+                viewModel.showPinBottomSheet(action)
+            }
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -158,8 +153,8 @@ fun SecurityScreen(
         // ==========================================
         SequentialPermissionsCard(
             permissions = viewModel.permissions,
-            onTogglePermission = { id -> viewModel.togglePermission(id) },
-            onGrantAll = { viewModel.grantAllPermissions() }
+            onTogglePermission = { id -> viewModel.togglePermission(id, context) },
+            onGrantAll = { viewModel.grantAllPermissions(context) }
         )
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -179,12 +174,16 @@ fun SecurityScreen(
 }
 
 // -----------------------------------------------------------------------------------
-// 1. Compact & Modern Segmented Theme Selection Card
+// 1. Unified Compact Quick Settings Card (Theme, Language, PIN in 3 Lines)
 // -----------------------------------------------------------------------------------
 @Composable
-private fun ThemeSelectionCard(
+private fun UnifiedQuickSettingsCard(
+    viewModel: FocusViewModel,
     currentTheme: AppThemeMode,
-    onThemeSelected: (AppThemeMode) -> Unit
+    onThemeSelected: (AppThemeMode) -> Unit,
+    currentLanguage: com.example.util.AppLanguage,
+    onLanguageSelected: (com.example.util.AppLanguage) -> Unit,
+    onPinAction: () -> Unit
 ) {
     val colors = AppTheme.colors
     val strings = com.example.util.LocalAppStrings.current
@@ -196,406 +195,149 @@ private fun ThemeSelectionCard(
             .background(colors.surface)
             .border(1.dp, colors.border, RoundedCornerShape(16.dp))
             .padding(14.dp)
-            .testTag("theme_selection_card")
+            .testTag("unified_quick_settings_card")
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Line 1: Theme
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.primary.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = when (currentTheme) {
-                                AppThemeMode.DARK -> Icons.Default.DarkMode
-                                AppThemeMode.LIGHT -> Icons.Default.LightMode
-                                AppThemeMode.SYSTEM -> Icons.Default.SettingsBrightness
-                            },
-                            contentDescription = "Theme Icon",
-                            tint = colors.primaryBright,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
+                    Icon(
+                        imageVector = when (currentTheme) {
+                            AppThemeMode.DARK -> Icons.Default.DarkMode
+                            AppThemeMode.LIGHT -> Icons.Default.LightMode
+                            AppThemeMode.SYSTEM -> Icons.Default.SettingsBrightness
+                        },
+                        contentDescription = "Theme",
+                        tint = colors.primaryBright,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(modifier = Modifier.width(10.dp))
-
                     Text(
                         text = strings.themeCardTitle,
                         color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Text(
-                    text = when (currentTheme) {
-                        AppThemeMode.DARK -> strings.themeDarkActive
-                        AppThemeMode.LIGHT -> strings.themeLightActive
-                        AppThemeMode.SYSTEM -> strings.themeSystemActive
-                    },
-                    color = colors.primaryBright,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Modern Horizontal Segmented Control
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.surfaceElevated)
-                    .border(1.dp, colors.borderLight, RoundedCornerShape(12.dp))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                CompactThemeSegment(
-                    label = strings.themeDark,
-                    icon = Icons.Default.DarkMode,
-                    isSelected = currentTheme == AppThemeMode.DARK,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onThemeSelected(AppThemeMode.DARK) }
-                )
-
-                CompactThemeSegment(
-                    label = strings.themeLight,
-                    icon = Icons.Default.LightMode,
-                    isSelected = currentTheme == AppThemeMode.LIGHT,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onThemeSelected(AppThemeMode.LIGHT) }
-                )
-
-                CompactThemeSegment(
-                    label = strings.themeSystem,
-                    icon = Icons.Default.SettingsBrightness,
-                    isSelected = currentTheme == AppThemeMode.SYSTEM,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onThemeSelected(AppThemeMode.SYSTEM) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactThemeSegment(
-    label: String,
-    icon: ImageVector,
-    isSelected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val colors = AppTheme.colors
-    val animBgColor by animateColorAsState(
-        targetValue = if (isSelected) colors.primary.copy(alpha = 0.22f) else Color.Transparent,
-        animationSpec = tween(200),
-        label = "segment_bg"
-    )
-    val animBorderColor by animateColorAsState(
-        targetValue = if (isSelected) colors.primary.copy(alpha = 0.6f) else Color.Transparent,
-        animationSpec = tween(200),
-        label = "segment_border"
-    )
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(9.dp))
-            .background(animBgColor)
-            .border(1.dp, animBorderColor, RoundedCornerShape(9.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (isSelected) colors.primaryBright else colors.textMuted,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = label,
-                color = if (isSelected) colors.textPrimary else colors.textSecondary,
-                fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-            )
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------------
-// 1.5. Compact Language Selection Card
-// -----------------------------------------------------------------------------------
-@Composable
-private fun LanguageSelectionCard(
-    currentLanguage: com.example.util.AppLanguage,
-    onLanguageSelected: (com.example.util.AppLanguage) -> Unit
-) {
-    val colors = AppTheme.colors
-    val strings = com.example.util.LocalAppStrings.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(16.dp))
-            .padding(14.dp)
-            .testTag("language_selection_card")
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.primary.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.Language,
-                            contentDescription = "Language Icon",
-                            tint = colors.primaryBright,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Text(
-                        text = strings.languageCardTitle,
-                        color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Modern Horizontal Segmented Control
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.surfaceElevated)
-                    .border(1.dp, colors.borderLight, RoundedCornerShape(12.dp))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                CompactLanguageSegment(
-                    label = "বাংলা",
-                    isSelected = currentLanguage == com.example.util.AppLanguage.BENGALI,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onLanguageSelected(com.example.util.AppLanguage.BENGALI) }
-                )
-
-                CompactLanguageSegment(
-                    label = "English",
-                    isSelected = currentLanguage == com.example.util.AppLanguage.ENGLISH,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onLanguageSelected(com.example.util.AppLanguage.ENGLISH) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactLanguageSegment(
-    label: String,
-    isSelected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val colors = AppTheme.colors
-    val animBgColor by animateColorAsState(
-        targetValue = if (isSelected) colors.primary.copy(alpha = 0.22f) else Color.Transparent,
-        animationSpec = tween(200),
-        label = "segment_bg"
-    )
-    val animBorderColor by animateColorAsState(
-        targetValue = if (isSelected) colors.primary.copy(alpha = 0.6f) else Color.Transparent,
-        animationSpec = tween(200),
-        label = "segment_border"
-    )
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(9.dp))
-            .background(animBgColor)
-            .border(1.dp, animBorderColor, RoundedCornerShape(9.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            color = if (isSelected) colors.textPrimary else colors.textSecondary,
-            fontSize = 12.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-        )
-    }
-}
-
-// -----------------------------------------------------------------------------------
-// 2. PIN Management Card (Clean & Modern)
-// -----------------------------------------------------------------------------------
-@Composable
-private fun PinManagementCard(
-    viewModel: FocusViewModel,
-    onCreatePin: () -> Unit,
-    onChangePin: () -> Unit,
-    onResetPin: () -> Unit,
-    onForgotPin: () -> Unit
-) {
-    val colors = AppTheme.colors
-    val strings = com.example.util.LocalAppStrings.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(16.dp))
-            .padding(14.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.warning.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "PIN Lock",
-                            tint = colors.warning,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column {
-                        Text(
-                            text = strings.pinCardTitle,
-                            color = colors.textPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (viewModel.isPinConfigured) strings.pinConfigured else strings.pinNotConfigured,
-                            color = if (viewModel.isPinConfigured) colors.secondary else colors.alert,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Action Buttons for PIN
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = if (viewModel.isPinConfigured) onChangePin else onCreatePin,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.primary,
-                        contentColor = if (colors.isDark) Color(0xFF0D1117) else Color.White
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                        .testTag("btn_pin_create_change")
-                ) {
-                    Icon(
-                        imageVector = if (viewModel.isPinConfigured) Icons.Default.LockReset else Icons.Default.Lock,
-                        contentDescription = null,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = if (viewModel.isPinConfigured) strings.pinChangeButton else strings.pinCreateButton,
-                        fontSize = 12.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
                 OutlinedButton(
-                    onClick = onResetPin,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = colors.textPrimary
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(
-                        brush = Brush.horizontalGradient(listOf(colors.border, colors.border))
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                        .testTag("btn_pin_reset")
+                    onClick = {
+                        val nextTheme = when (currentTheme) {
+                            AppThemeMode.DARK -> AppThemeMode.LIGHT
+                            AppThemeMode.LIGHT -> AppThemeMode.SYSTEM
+                            AppThemeMode.SYSTEM -> AppThemeMode.DARK
+                        }
+                        onThemeSelected(nextTheme)
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryBright),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(32.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = colors.warning,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        text = strings.pinResetButton,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                        text = when (currentTheme) {
+                            AppThemeMode.DARK -> strings.themeDarkActive
+                            AppThemeMode.LIGHT -> strings.themeLightActive
+                            AppThemeMode.SYSTEM -> strings.themeSystemActive
+                        },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
 
-            // Forgot PIN hint
+            // Line 2: Language
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onForgotPin)
-                    .padding(vertical = 3.dp),
-                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = strings.pinForgotHint,
-                    color = colors.textMuted,
-                    fontSize = 11.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Language,
+                        contentDescription = "Language",
+                        tint = colors.primaryBright,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = strings.languageCardTitle,
+                        color = colors.textPrimary,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val nextLang = if (currentLanguage == com.example.util.AppLanguage.BENGALI) 
+                            com.example.util.AppLanguage.ENGLISH 
+                        else 
+                            com.example.util.AppLanguage.BENGALI
+                        onLanguageSelected(nextLang)
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryBright),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text(
+                        text = currentLanguage.displayName,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+
+            // Line 3: PIN Security / Reset
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "PIN",
+                        tint = colors.warning,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = strings.pinCardTitle,
+                        color = colors.textPrimary,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Button(
+                    onClick = onPinAction,
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.warning.copy(alpha = 0.2f), contentColor = colors.warning),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LockReset,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (viewModel.isPinConfigured) strings.pinChangeButton else strings.pinCreateButton,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

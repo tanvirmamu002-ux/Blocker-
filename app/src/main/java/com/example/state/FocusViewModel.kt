@@ -38,8 +38,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-class FocusViewModel : ViewModel() {
+class FocusViewModel(application: android.app.Application) : androidx.lifecycle.AndroidViewModel(application) {
+    private val context: Context
+        get() = getApplication<android.app.Application>().applicationContext
 
+    var installedApps = androidx.compose.runtime.mutableStateListOf<com.example.util.AppItem>()
+    var isAppsLoaded by androidx.compose.runtime.mutableStateOf(false)
+
+    fun loadInstalledApps() {
+        if (isAppsLoaded) return
+        viewModelScope.launch {
+            val apps = com.example.util.AppListHelper.getInstalledApps(context)
+            installedApps.clear()
+            installedApps.addAll(apps)
+            isAppsLoaded = true
+        }
+    }
     // --- Language State ---
     var appLanguage by mutableStateOf(AppLanguage.BENGALI)
         private set
@@ -142,7 +156,9 @@ class FocusViewModel : ViewModel() {
         }
 
         if (!FocusPermissionHelper.areAllRequiredPermissionsGranted(context)) {
-            isFocusLockPermissionDialogVisible = true
+            showToast("এই ফিচারটি চালু করার জন্য কিছু পারমিশনের প্রয়োজন। সেটিংসে গিয়ে পারমিশনগুলো চালু করুন।")
+            scrollToPermissionsRequested = true
+            selectTab(NavigationTab.SETTINGS)
         } else {
             isFocusLockSetupDialogVisible = true
         }
@@ -675,88 +691,12 @@ class FocusViewModel : ViewModel() {
     var isTimelineScreenVisible by mutableStateOf(false)
     var selectedRoutineForDetail by mutableStateOf<FocusRoutine?>(null)
 
-    val focusRoutines = mutableStateListOf(
-        FocusRoutine(
-            id = "1",
-            titleBangla = "Study Focus (পড়াশোনা)",
-            titleEnglish = "Study Focus",
-            timeRange = "8:00 PM – 11:00 PM",
-            startTime = "08:00 PM",
-            endTime = "11:00 PM",
-            durationText = "3h",
-            activeDaysBangla = "সোম – শুক্র",
-            activeDaysEnglish = "Mon – Fri",
-            targetedAppsBangla = "6 Apps • Shorts • Websites",
-            targetedAppsEnglish = "6 Apps • Shorts • Websites",
-            colorHex = "#10B981", // Emerald
-            iconType = "book",
-            blockShorts = true,
-            blockWebsites = true,
-            isStrict = true,
-            isEnabled = true,
-            isActiveNow = true
-        ),
-        FocusRoutine(
-            id = "2",
-            titleBangla = "Deep Work (অফিস ও গভীর কাজ)",
-            titleEnglish = "Deep Work",
-            timeRange = "9:00 AM – 1:00 PM",
-            startTime = "09:00 AM",
-            endTime = "01:00 PM",
-            durationText = "4h",
-            activeDaysBangla = "সোম – শুক্র",
-            activeDaysEnglish = "Mon – Fri",
-            targetedAppsBangla = "Work Apps • Social Media",
-            targetedAppsEnglish = "Work Apps • Social Media",
-            colorHex = "#8B5CF6", // Purple
-            iconType = "briefcase",
-            blockShorts = true,
-            blockWebsites = true,
-            isStrict = false,
-            isEnabled = true,
-            isActiveNow = false
-        ),
-        FocusRoutine(
-            id = "3",
-            titleBangla = "Sleep Protection (ঘুমের সুরক্ষা)",
-            titleEnglish = "Sleep Protection",
-            timeRange = "11:00 PM – 6:00 AM",
-            startTime = "11:00 PM",
-            endTime = "06:00 AM",
-            durationText = "7h",
-            activeDaysBangla = "প্রতিদিন",
-            activeDaysEnglish = "Everyday",
-            targetedAppsBangla = "Social • Shorts • Gambling",
-            targetedAppsEnglish = "Social • Shorts • Gambling",
-            colorHex = "#F59E0B", // Amber/Orange
-            iconType = "moon",
-            blockShorts = true,
-            blockWebsites = true,
-            isStrict = true,
-            isEnabled = true,
-            isActiveNow = false
-        ),
-        FocusRoutine(
-            id = "4",
-            titleBangla = "Personal Time (ব্যক্তিগত সময়)",
-            titleEnglish = "Personal Time",
-            timeRange = "5:00 PM – 7:00 PM",
-            startTime = "05:00 PM",
-            endTime = "07:00 PM",
-            durationText = "2h",
-            activeDaysBangla = "সোম – শুক্র",
-            activeDaysEnglish = "Mon – Fri",
-            targetedAppsBangla = "All Apps Allowed",
-            targetedAppsEnglish = "All Apps Allowed",
-            colorHex = "#3B82F6", // Blue
-            iconType = "person",
-            blockShorts = false,
-            blockWebsites = false,
-            isStrict = false,
-            isEnabled = true,
-            isActiveNow = false
-        )
-    )
+    val focusRoutines = mutableStateListOf<FocusRoutine>()
+
+    init {
+        val prefs = com.example.util.FocusLockPreferences.getInstance(context)
+        focusRoutines.addAll(prefs.getRoutines())
+    }
 
     fun toggleRoutine(id: String) {
         val index = focusRoutines.indexOfFirst { it.id == id }
@@ -764,6 +704,7 @@ class FocusViewModel : ViewModel() {
             val r = focusRoutines[index]
             val newState = !r.isEnabled
             focusRoutines[index] = r.copy(isEnabled = newState)
+            com.example.util.FocusLockPreferences.getInstance(context).saveRoutines(focusRoutines)
             showToast(if (newState) "${r.titleBangla} সক্রিয় করা হয়েছে" else "${r.titleBangla} নিষ্ক্রিয় করা হয়েছে")
         }
     }
@@ -771,6 +712,7 @@ class FocusViewModel : ViewModel() {
     fun deleteRoutine(id: String) {
         val item = focusRoutines.find { it.id == id }
         focusRoutines.removeAll { it.id == id }
+        com.example.util.FocusLockPreferences.getInstance(context).saveRoutines(focusRoutines)
         if (item != null) {
             showToast("${item.titleBangla} রুটিন মুছে ফেলা হয়েছে")
         }
@@ -803,11 +745,13 @@ class FocusViewModel : ViewModel() {
                 isEnabled = true
             )
         )
+        com.example.util.FocusLockPreferences.getInstance(context).saveRoutines(focusRoutines)
         showToast("\"$title\" রুটিন সফলভাবে তৈরি হয়েছে")
     }
 
     fun addRichRoutine(routine: FocusRoutine) {
         focusRoutines.add(0, routine)
+        com.example.util.FocusLockPreferences.getInstance(context).saveRoutines(focusRoutines)
         showToast("\"${routine.titleBangla}\" রুটিন সফলভাবে তৈরি ও সংরক্ষণ করা হয়েছে")
     }
 
@@ -1182,21 +1126,58 @@ class FocusViewModel : ViewModel() {
         )
     )
 
-    fun togglePermission(id: String) {
+    fun checkPermissions(context: Context) {
+        val accessibility = FocusPermissionHelper.isAccessibilityPermissionGranted(context)
+        val exactAlarm = FocusPermissionHelper.isExactAlarmPermissionGranted(context)
+        val notification = FocusPermissionHelper.isNotificationPermissionGranted(context)
+        val overlay = FocusPermissionHelper.isOverlayPermissionGranted(context)
+        val battery = FocusPermissionHelper.isBatteryOptimizationDisabled(context)
+        val deviceAdmin = FocusPermissionHelper.isDeviceAdminGranted(context)
+
+        updatePermissionState("accessibility", accessibility)
+        updatePermissionState("exact_alarm", exactAlarm)
+        updatePermissionState("notification", notification)
+        updatePermissionState("overlay", overlay)
+        updatePermissionState("battery", battery)
+        updatePermissionState("device_admin", deviceAdmin)
+    }
+
+    private fun updatePermissionState(id: String, isGranted: Boolean) {
         val index = permissions.indexOfFirst { it.id == id }
-        if (index != -1) {
-            val p = permissions[index]
-            val newState = !p.isGranted
-            permissions[index] = p.copy(isGranted = newState)
-            showToast(if (newState) "${p.titleBangla} সক্রিয় হয়েছে!" else "${p.titleBangla} স্থগিত করা হয়েছে")
+        if (index != -1 && permissions[index].isGranted != isGranted) {
+            permissions[index] = permissions[index].copy(isGranted = isGranted)
         }
     }
 
-    fun grantAllPermissions() {
-        for (i in 0 until permissions.size) {
-            permissions[i] = permissions[i].copy(isGranted = true)
+    fun togglePermission(id: String, context: Context) {
+        val index = permissions.indexOfFirst { it.id == id }
+        if (index != -1) {
+            val p = permissions[index]
+            if (!p.isGranted) {
+                // Not granted, open specific settings
+                when (id) {
+                    "accessibility" -> FocusPermissionHelper.openAccessibilitySettings(context)
+                    "exact_alarm" -> FocusPermissionHelper.openExactAlarmSettings(context)
+                    "notification" -> FocusPermissionHelper.openNotificationSettings(context)
+                    "overlay" -> FocusPermissionHelper.openOverlaySettings(context)
+                    "battery" -> FocusPermissionHelper.openBatteryOptimizationSettings(context)
+                    "device_admin" -> FocusPermissionHelper.openDeviceAdminSettings(context)
+                }
+            } else {
+                showToast("এই পারমিশনটি ইতোমধ্যেই দেওয়া আছে।")
+            }
         }
-        showToast("সবগুলো ৬টি পারমিশন সফলভাবে সক্রিয় করা হয়েছে!")
+    }
+
+    fun grantAllPermissions(context: Context) {
+        // Find the first missing permission and open its settings
+        val missingPermission = permissions.sortedBy { it.serialNumber }.firstOrNull { !it.isGranted }
+        if (missingPermission != null) {
+            togglePermission(missingPermission.id, context)
+            showToast("দয়া করে ${missingPermission.titleBangla} পারমিশনটি দিন")
+        } else {
+            showToast("সবগুলো পারমিশন প্রস্তুত রয়েছে!")
+        }
     }
 
     // --- Dialogs & Modals ---
@@ -1209,6 +1190,7 @@ class FocusViewModel : ViewModel() {
     var isNotificationAlertVisible by mutableStateOf(false)
     var isScreenTimeLimitDialogVisible by mutableStateOf(false)
     var isFocusLockSetupDialogVisible by mutableStateOf(false)
+    var scrollToPermissionsRequested by mutableStateOf(false)
     var isFocusLockPermissionDialogVisible by mutableStateOf(false)
     var isFocusLockEmergencyDialogVisible by mutableStateOf(false)
     var isFocusLockCompletionDialogVisible by mutableStateOf(false)

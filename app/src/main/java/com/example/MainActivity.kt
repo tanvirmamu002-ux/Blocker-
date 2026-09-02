@@ -48,7 +48,6 @@ import com.example.ui.components.EmergencyDialog
 import com.example.ui.components.FocusLockActiveScreen
 import com.example.ui.components.FocusLockCompletionDialog
 import com.example.ui.components.FocusLockEmergencyDialog
-import com.example.ui.components.FocusLockPermissionDialog
 import com.example.ui.screens.FocusLockScreen
 import com.example.ui.components.FocusLockSetupDialog
 import com.example.ui.components.NotificationAlertsDialog
@@ -100,6 +99,20 @@ fun FocusShieldApp(
 ) {
     val colors = AppTheme.colors
     val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.checkPermissions(context)
+                viewModel.checkAndRestoreFocusLock(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.bindContext(context)
@@ -268,7 +281,6 @@ fun FocusShieldApp(
     ProfileDialog(viewModel = viewModel)
     NotificationAlertsDialog(viewModel = viewModel)
     ScreenTimeLimitDialog(viewModel = viewModel)
-    FocusLockPermissionDialog(viewModel = viewModel)
     FocusLockEmergencyDialog(viewModel = viewModel)
     FocusLockCompletionDialog(viewModel = viewModel)
 }

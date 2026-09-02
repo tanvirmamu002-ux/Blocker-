@@ -560,7 +560,9 @@ fun FocusLockScreen(
                 Button(
                     onClick = {
                         if (!FocusPermissionHelper.areAllRequiredPermissionsGranted(context)) {
-                            viewModel.isFocusLockPermissionDialogVisible = true
+                            viewModel.showToast("এই ফিচারটি চালু করার জন্য কিছু পারমিশনের প্রয়োজন। সেটিংসে গিয়ে পারমিশনগুলো চালু করুন।")
+                            viewModel.scrollToPermissionsRequested = true
+                            viewModel.selectTab(com.example.data.NavigationTab.SETTINGS)
                         } else {
                             viewModel.startFocusLockSession(
                                 context = context,

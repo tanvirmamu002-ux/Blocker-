@@ -260,13 +260,37 @@ private fun ScheduleMainView(
         Spacer(modifier = Modifier.height(10.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            viewModel.focusRoutines.forEach { routine ->
-                RoutineListCard(
-                    routine = routine,
-                    onToggle = { viewModel.toggleRoutine(routine.id) },
-                    onClick = { viewModel.selectedRoutineForDetail = routine },
-                    onDelete = { viewModel.deleteRoutine(routine.id) }
-                )
+            if (viewModel.focusRoutines.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Timeline,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No schedules created yet.",
+                            color = colors.textSecondary,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            } else {
+                viewModel.focusRoutines.forEach { routine ->
+                    RoutineListCard(
+                        routine = routine,
+                        onToggle = { viewModel.toggleRoutine(routine.id) },
+                        onClick = { viewModel.selectedRoutineForDetail = routine },
+                        onDelete = { viewModel.deleteRoutine(routine.id) }
+                    )
+                }
             }
         }
 

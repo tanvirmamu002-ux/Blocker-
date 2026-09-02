@@ -173,94 +173,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // 5. Today's Metrics (আজকের মেট্রিক্স) - 3 Soft Depth Cards
-        Text(
-            text = strings.homeMetricsTitle,
-            color = colors.textPrimary,
-            fontSize = 17.sp,
-            fontFamily = HindSiliguri,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            MetricCard(
-                icon = {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.alert.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.PanTool,
-                            contentDescription = null,
-                            tint = colors.alert,
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
-                },
-                title = strings.homeMetricBlocked,
-                value = "${viewModel.blockedAttemptsToday}", // The word "বার" could be tricky, let's just append it or remove it? Actually English shouldn't have 'বার'. Let's add string for "times" or just omit it. Wait, I'll just use value.
-                valueColor = colors.textPrimary,
-                modifier = Modifier.weight(1f)
-            )
-
-            MetricCard(
-                icon = {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.primary.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.HourglassBottom,
-                            contentDescription = "Saved Time",
-                            tint = colors.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                },
-                title = strings.homeMetricSaved,
-                value = viewModel.savedHoursToday,
-                valueColor = colors.textPrimary,
-                modifier = Modifier.weight(1.1f)
-            )
-
-            MetricCard(
-                icon = {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.purple.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Psychology,
-                            contentDescription = "Focus",
-                            tint = colors.purple,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                },
-                title = strings.homeMetricSessions,
-                value = "${viewModel.focusSessionsToday}",
-                valueColor = colors.textPrimary,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(22.dp))
-
-        // 6. Quick Actions (কুইক অ্যাকশনস) - 4 Glassmorphic Action Cards
+        // 5. Quick Actions (কুইক অ্যাকশন) - 2 Primary Action Cards (Focus Lock & On-Time Block)
         Text(
             text = strings.homeQuickActionsTitle,
             color = colors.textPrimary,
@@ -273,8 +186,9 @@ fun HomeScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // 1. Focus Lock Card
             QuickActionCard(
                 title = strings.quickActionFocusLock,
                 subtitle = if (viewModel.focusLockState == FocusLockState.ACTIVE) strings.quickActionFocusLockActive else strings.quickActionFocusLockSetup,
@@ -289,48 +203,14 @@ fun HomeScreen(
                 testTag = "action_focus_lock"
             )
 
-            QuickActionCard(
-                title = strings.quickActionScreenLimit,
-                subtitle = strings.quickActionScreenLimitDesc,
-                icon = Icons.Default.Timer,
-                iconTint = colors.secondary,
-                iconBg = colors.secondary.copy(alpha = 0.14f),
-                isActive = false,
-                onClick = {
-                    viewModel.isScreenTimeLimitDialogVisible = true
-                },
-                modifier = Modifier.weight(1f),
-                testTag = "action_screen_time_limit"
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            QuickActionCard(
-                title = strings.quickActionSchedule,
-                subtitle = strings.quickActionScheduleDesc,
-                icon = Icons.Default.CalendarToday,
-                iconTint = colors.warning,
-                iconBg = colors.warning.copy(alpha = 0.14f),
-                isActive = false,
-                onClick = {
-                    viewModel.selectTab(NavigationTab.SCHEDULE)
-                },
-                modifier = Modifier.weight(1f),
-                testTag = "action_schedule"
-            )
-
+            // 2. On-Time Block Card
             QuickActionCard(
                 title = strings.quickActionOneTime,
                 subtitle = if (viewModel.isQuickBlockNowActive) strings.quickActionOneTimeActive else strings.quickActionOneTimeDesc,
                 icon = Icons.Default.Block,
                 iconTint = colors.alert,
                 iconBg = colors.alert.copy(alpha = 0.14f),
-                isActive = false,
+                isActive = viewModel.isQuickBlockNowActive,
                 onClick = {
                     viewModel.toggleQuickBlockNow()
                     viewModel.showToast(
@@ -594,51 +474,6 @@ private fun StreakBanner(
                 fontSize = 12.sp,
                 fontFamily = HindSiliguri,
                 fontWeight = FontWeight.SemiBold
-            )
-        }
-    }
-}
-
-@Composable
-private fun MetricCard(
-    icon: @Composable () -> Unit,
-    title: String,
-    value: String,
-    valueColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val colors = AppTheme.colors
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                brush = Brush.verticalGradient(
-                    listOf(
-                        colors.surfaceElevated.copy(alpha = 0.7f),
-                        colors.surface
-                    )
-                )
-            )
-            .border(1.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-            .padding(14.dp)
-    ) {
-        Column(horizontalAlignment = Alignment.Start) {
-            icon()
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = title,
-                color = colors.textSecondary,
-                fontSize = 11.5.sp,
-                fontFamily = HindSiliguri,
-                lineHeight = 14.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = value,
-                color = valueColor,
-                fontSize = 16.5.sp,
-                fontFamily = HindSiliguri,
-                fontWeight = FontWeight.Bold
             )
         }
     }
