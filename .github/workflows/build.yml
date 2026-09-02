@@ -22,8 +22,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Prepare Environment File
+        shell: bash
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env 2>/dev/null || touch .env
+          fi
+
       - name: Build Debug APK
-        run: gradle assembleDebug -x processDebugGoogleServices --no-daemon
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
