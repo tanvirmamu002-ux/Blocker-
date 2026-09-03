@@ -29,7 +29,7 @@ object AppLanguageManager {
 }
 
 // Global strings mapping
-val LocalAppStrings = compositionLocalOf<AppStrings> { error("No AppStrings provided") }
+val LocalAppStrings = compositionLocalOf<AppStrings> { BengaliStrings }
 
 interface AppStrings {
     // Settings / Security Screen
@@ -43,8 +43,15 @@ interface AppStrings {
     val themeDark: String
     val themeLight: String
     val themeSystem: String
+    val themeSheetTitle: String
+    val themeSheetSubtitle: String
+    val themeLightDesc: String
+    val themeDarkDesc: String
+    val themeSystemDesc: String
 
     val languageCardTitle: String
+    val languageSheetTitle: String
+    val languageSheetSubtitle: String
     
     val pinCardTitle: String
     val pinCardSubtitle: String
@@ -59,6 +66,24 @@ interface AppStrings {
     val pinCreateButton: String
     val pinResetButton: String
     val pinForgotHint: String
+    val pinVerifyCurrentTitle: String
+    val pinVerifyCurrentSubtitle: String
+    val pinManageOptionsTitle: String
+    val pinOptionChangeTitle: String
+    val pinOptionChangeDesc: String
+    val pinOptionDeleteTitle: String
+    val pinOptionDeleteDesc: String
+    val pinDeleteConfirmTitle: String
+    val pinDeleteConfirmMessage: String
+    val pinDeleteConfirmButton: String
+    val pinEnterNewTitle: String
+    val pinEnterNewSubtitle: String
+    val pinConfirmNewTitle: String
+    val pinConfirmNewSubtitle: String
+    val pinMismatchError: String
+    val pinChangedSuccess: String
+    val pinDeletedSuccess: String
+    val pinCreatedSuccess: String
     
     val permCardTitle: String
     val permCardSubtitle: String
@@ -73,6 +98,15 @@ interface AppStrings {
     
     // Home Screen
     val homeGreeting: String
+    fun getDynamicGreeting(userName: String, hour: Int = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)): String
+    val onboardingWelcomeTitle: String
+    val onboardingWelcomeSubtitle: String
+    val onboardingNameLabel: String
+    val onboardingNamePlaceholder: String
+    val onboardingReligionLabel: String
+    val onboardingSubmitButton: String
+    val onboardingNameRequiredError: String
+    val profileLabelReligion: String
     val homeSavedTimePrefix: String
     val homeMetricsTitle: String
     val homeMetricBlocked: String
@@ -181,6 +215,16 @@ interface AppStrings {
     val profileLoginSubmit: String
     val profileRegisterSubmit: String
     
+    // Protected Activity & Security Section
+    val profileSecuritySectionTitle: String
+    val profileProtectedActivityTitle: String
+    val profileProtectedActivityDesc: String
+    val profileProtectedActivityUnlock: String
+    val profileProtectedActivityLocked: String
+    val profileProtectedActivityEmpty: String
+    val profileProtectedActivityLockAgain: String
+    val profileProtectedActivityClear: String
+    
     // Create Routine Screen
     val routineCreateTitle: String
     val routineCreateSubtitle: String
@@ -257,6 +301,31 @@ interface AppStrings {
     val timeSliderDelete: String
     val timeSliderCancel: String
     val timeSliderSave: String
+
+    // Notification & Alerts
+    val notificationQuickTitle: String
+    val notificationGranted: String
+    val notificationNotGranted: String
+    val notificationSheetTitle: String
+    val notificationSheetSubtitle: String
+    val notificationPermCardTitle: String
+    val notificationPermCardDesc: String
+    val notificationGrantButton: String
+    val notificationGrantedChip: String
+    val notificationToggleBlocking: String
+    val notificationToggleBlockingDesc: String
+    val notificationToggleTimer: String
+    val notificationToggleTimerDesc: String
+    val notificationToggleSecurity: String
+    val notificationToggleSecurityDesc: String
+    val notificationToggleReminders: String
+    val notificationToggleRemindersDesc: String
+    val notificationTestButton: String
+    val notificationTestSent: String
+    val notificationAlertsTitle: String
+    val notificationAlertsEmpty: String
+    val notificationMarkAllRead: String
+    val notificationClearAll: String
 }
 
 object BengaliStrings : AppStrings {
@@ -269,9 +338,16 @@ object BengaliStrings : AppStrings {
     override val themeSystemActive = "সিস্টেম অনুযায়ী"
     override val themeDark = "ডার্ক"
     override val themeLight = "লাইট"
-    override val themeSystem = "সিস্টেম"
+    override val themeSystem = "সিস্টেম অনুযায়ী"
+    override val themeSheetTitle = "অ্যাপের থিম নির্বাচন করুন"
+    override val themeSheetSubtitle = "আপনার পছন্দের ইন্টারফেস মোড বেছে নিন"
+    override val themeLightDesc = "উজ্জ্বল ও আধুনিক ক্লিন মিনিমালিস্ট ইন্টারফেস"
+    override val themeDarkDesc = "ডার্ক ব্যাকগ্রাউন্ড ও ব্যাটারি সাশ্রয়ী ইন্টারফেস"
+    override val themeSystemDesc = "ডিভাইসের সিস্টেম সেটিংস স্বয়ংক্রিয়ভাবে অনুসরণ করবে"
 
     override val languageCardTitle = "অ্যাপের ভাষা"
+    override val languageSheetTitle = "অ্যাপের ভাষা নির্বাচন করুন"
+    override val languageSheetSubtitle = "সম্পূর্ণ অ্যাপের ইন্টারফেসের ভাষা পরিবর্তন করুন"
     
     override val pinCardTitle = "সিকিউরিটি পিন (PIN) সেটআপ"
     override val pinCardSubtitle = "অ্যান্টি-আনইনস্টল ও ফোর্স ক্লোজ প্রোটেকশন"
@@ -286,6 +362,24 @@ object BengaliStrings : AppStrings {
     override val pinCreateButton = "নতুন পিন তৈরি"
     override val pinResetButton = "রিসেট করুন"
     override val pinForgotHint = "পিন ভুলে গেছেন? ইমেইল দিয়ে উদ্ধার করুন"
+    override val pinVerifyCurrentTitle = "বর্তমান পিন যাচাই করুন"
+    override val pinVerifyCurrentSubtitle = "নিরাপত্তা নিশ্চিত করতে অনুগ্রহ করে বর্তমান ৪-ডিজিটের পিন প্রবেশ করান"
+    override val pinManageOptionsTitle = "সিকিউরিটি পিন ব্যবস্থাপনা"
+    override val pinOptionChangeTitle = "পিন পরিবর্তন করুন (Reset / Change PIN)"
+    override val pinOptionChangeDesc = "আপনার গোপন ৪-সংখ্যার নতুন পিন নির্ধারণ করুন"
+    override val pinOptionDeleteTitle = "পিন মুছে ফেলুন (Delete PIN)"
+    override val pinOptionDeleteDesc = "সিকিউরিটি পিন বন্ধ ও মুছে ফেলুন"
+    override val pinDeleteConfirmTitle = "সিকিউরিটি পিন মুছে ফেলতে চান?"
+    override val pinDeleteConfirmMessage = "আপনি কি নিশ্চিতভাবে সিকিউরিটি পিন মুছে ফেলতে চান? এটি মুছে ফেললে অ্যাপের সেটিংসে কোনো পিনের প্রয়োজন হবে না।"
+    override val pinDeleteConfirmButton = "মুছে ফেলুন"
+    override val pinEnterNewTitle = "নতুন ৪-ডিজিট পিন দিন"
+    override val pinEnterNewSubtitle = "গোপন ও সুরক্ষিত ৪ সংখ্যার পিন নির্ধারণ করুন"
+    override val pinConfirmNewTitle = "নতুন পিন নিশ্চিত করুন"
+    override val pinConfirmNewSubtitle = "নিশ্চিত করতে একই ৪-ডিজিটের পিন পুনরায় প্রবেশ করান"
+    override val pinMismatchError = "পিন দুটি মেলেনি! প্রথম থেকে আবার চেষ্টা করুন।"
+    override val pinChangedSuccess = "সিকিউরিটি পিন সফলভাবে পরিবর্তন ও সংরক্ষণ করা হয়েছে 🔒"
+    override val pinDeletedSuccess = "সিকিউরিটি পিন সফলভাবে মুছে ফেলা হয়েছে 🗑️"
+    override val pinCreatedSuccess = "নতুন সিকিউরিটি পিন সফলভাবে তৈরি ও সংরক্ষণ করা হয়েছে 🔒"
 
     override val permCardTitle = "সিস্টেম পারমিশন প্রোটেকশন"
     override val permCardSubtitle = "অ্যাপটি সঠিকভাবে কাজ করার জন্য নিচের সব পারমিশন প্রয়োজন"
@@ -298,7 +392,39 @@ object BengaliStrings : AppStrings {
     override val forgotPinCancel = "বাতিল"
     override val forgotPinConfirm = "পিন রিসেট করুন"
     
-    override val homeGreeting = "শুভ সন্ধ্যা, Boss"
+    override fun getDynamicGreeting(userName: String, hour: Int): String {
+        val cleanName = userName
+            .replace("(Boss)", "")
+            .replace("Boss", "")
+            .replace("John Doe", "")
+            .replace("(বস)", "")
+            .replace("বস", "")
+            .replace("(", "")
+            .replace(")", "")
+            .trim()
+
+        val periodGreeting = when (hour) {
+            in 5..11 -> "শুভ সকাল"
+            in 12..15 -> "শুভ দুপুর"
+            in 16..17 -> "শুভ বিকাল"
+            in 18..20 -> "শুভ সন্ধ্যা"
+            else -> "শুভ রাত্রি"
+        }
+
+        return if (cleanName.isNotBlank()) "$periodGreeting, $cleanName" else periodGreeting
+    }
+
+    override val homeGreeting: String
+        get() = getDynamicGreeting("")
+
+    override val onboardingWelcomeTitle = "Focus Shield-এ স্বাগতম! 🛡️"
+    override val onboardingWelcomeSubtitle = "আপনার ডিজিটাল ওয়েলবিয়িং ও ফোকাস যাত্রা শুরু করতে নিচের তথ্যগুলো পূরণ করুন:"
+    override val onboardingNameLabel = "আপনার নাম"
+    override val onboardingNamePlaceholder = "যেমন: তানভীর আহমেদ"
+    override val onboardingReligionLabel = "আপনার ধর্ম"
+    override val onboardingSubmitButton = "শুরু করুন 🚀"
+    override val onboardingNameRequiredError = "অনুগ্রহ করে আপনার নাম লিখুন"
+    override val profileLabelReligion = "ধর্ম"
     override val homeSavedTimePrefix = "আজ আপনার সময় বাঁচিয়েছি "
     override val homeMetricsTitle = "আজকের মেট্রিক্স"
     override val homeMetricBlocked = "ব্লকড অ্যাটেম্পট"
@@ -403,6 +529,15 @@ object BengaliStrings : AppStrings {
     override val profileLoginSubmit = "লগইন সম্পন্ন করুন"
     override val profileRegisterSubmit = "অ্যাকাউন্ট তৈরি করুন"
     
+    override val profileSecuritySectionTitle = "সিকিউরিটি ও প্রাইভেসি"
+    override val profileProtectedActivityTitle = "সুরক্ষিত অ্যাক্টিভিটি (Protected Activity)"
+    override val profileProtectedActivityDesc = "সংবেদনশীল ও রেস্ট্রিক্টেড অ্যাক্টিভিটি হিস্ট্রি দেখার জন্য পিন ভেরিফিকেশন প্রয়োজন"
+    override val profileProtectedActivityUnlock = "পিন দিয়ে আনলক করুন"
+    override val profileProtectedActivityLocked = "লক করা রয়েছে • দেখার জন্য পিন দিয়ে আনলক করুন"
+    override val profileProtectedActivityEmpty = "কোনো সংবেদনশীল অ্যাক্টিভিটি হিস্ট্রি নেই"
+    override val profileProtectedActivityLockAgain = "পুনরায় লক করুন"
+    override val profileProtectedActivityClear = "সব মুছে ফেলুন"
+    
     override val routineCreateTitle = "নতুন রুটিন"
     override val routineCreateSubtitle = "একটি নতুন ফোকাস রুটিন তৈরি করুন"
     override val routineNameLabel = "রুটিনের নাম"
@@ -494,6 +629,31 @@ object BengaliStrings : AppStrings {
     override val timeSliderDelete = "মুছুন"
     override val timeSliderCancel = "বাতিল"
     override val timeSliderSave = "লিমিট সংরক্ষণ করুন"
+
+    // Notification & Alerts
+    override val notificationQuickTitle = "নোটিফিকেশন ও অ্যালার্ট"
+    override val notificationGranted = "অনুমতি সক্রিয় • অ্যালার্ট চালু"
+    override val notificationNotGranted = "অনুমতি দেওয়া হয়নি"
+    override val notificationSheetTitle = "নোটিফিকেশন ও অ্যালার্ট কন্ট্রোল"
+    override val notificationSheetSubtitle = "কোন ধরণের সতর্কতা ও আপডেট পেতে চান তা নিয়ন্ত্রণ করুন"
+    override val notificationPermCardTitle = "সিস্টেম নোটিফিকেশন অনুমতি"
+    override val notificationPermCardDesc = "অ্যাপ ও ওয়েবসাইট ব্লক করার পর তৎক্ষণাৎ সতর্কতা পাঠাতে প্রয়োজন"
+    override val notificationGrantButton = "অনুমতি দিন"
+    override val notificationGrantedChip = "সক্রিয় (Active)"
+    override val notificationToggleBlocking = "ব্লকিং সতর্কতা অ্যালার্ট"
+    override val notificationToggleBlockingDesc = "নিষিদ্ধ অ্যাপ বা শর্টস প্রতিহত করার সাথে সাথে নোটিফিকেশন পাবেন"
+    override val notificationToggleTimer = "ফোকাস টাইমার ও রুটিন আপডেট"
+    override val notificationToggleTimerDesc = "টাইমার চলাকালীন রিয়েল-টাইম অবশিষ্ট সময় ও সেশন সমাপ্তি বার্তা"
+    override val notificationToggleSecurity = "নিরাপত্তা ও পিন সতর্কতা"
+    override val notificationToggleSecurityDesc = "ভুল পিন চেষ্টা, জরুরি আনলক ও সেটিংস পরিবর্তনের অ্যালার্ট"
+    override val notificationToggleReminders = "দৈনিক স্ট্রিক ও রিমাইন্ডার"
+    override val notificationToggleRemindersDesc = "প্রতিদিনের ফোকাস গোল ও নিয়মানুবর্তিতার উৎসাহব্যঞ্জক বার্তা"
+    override val notificationTestButton = "টেস্ট নোটিফিকেশন পাঠান"
+    override val notificationTestSent = "টেস্ট নোটিফিকেশন সফলভাবে পাঠানো হয়েছে! নোটিফিকেশন বার চেক করুন।"
+    override val notificationAlertsTitle = "নিরাপত্তা ও ব্লকিং অ্যালার্ট"
+    override val notificationAlertsEmpty = "কোনো নতুন নোটিফিকেশন নেই"
+    override val notificationMarkAllRead = "সব পঠিত হিসেবে চিহ্নিত করুন"
+    override val notificationClearAll = "সব অ্যালার্ট মুছুন"
 }
 
 object EnglishStrings : AppStrings {
@@ -506,9 +666,16 @@ object EnglishStrings : AppStrings {
     override val themeSystemActive = "System default"
     override val themeDark = "Dark"
     override val themeLight = "Light"
-    override val themeSystem = "System"
+    override val themeSystem = "System default"
+    override val themeSheetTitle = "Select App Theme"
+    override val themeSheetSubtitle = "Choose your preferred display theme"
+    override val themeLightDesc = "Bright and modern minimalist clean interface"
+    override val themeDarkDesc = "Dark theme background and battery-friendly interface"
+    override val themeSystemDesc = "Automatically follows system display settings"
 
     override val languageCardTitle = "App Language"
+    override val languageSheetTitle = "Select App Language"
+    override val languageSheetSubtitle = "Change complete app interface language"
     
     override val pinCardTitle = "Security PIN Setup"
     override val pinCardSubtitle = "Anti-uninstall & force close protection"
@@ -523,6 +690,24 @@ object EnglishStrings : AppStrings {
     override val pinCreateButton = "Create PIN"
     override val pinResetButton = "Reset"
     override val pinForgotHint = "Forgot PIN? Recover via email"
+    override val pinVerifyCurrentTitle = "Verify Current PIN"
+    override val pinVerifyCurrentSubtitle = "Please enter your current 4-digit PIN to proceed"
+    override val pinManageOptionsTitle = "Security PIN Management"
+    override val pinOptionChangeTitle = "Change PIN (Reset / Change PIN)"
+    override val pinOptionChangeDesc = "Set a new secret 4-digit security PIN"
+    override val pinOptionDeleteTitle = "Delete PIN (Remove Protection)"
+    override val pinOptionDeleteDesc = "Remove security PIN protection from settings"
+    override val pinDeleteConfirmTitle = "Delete Security PIN?"
+    override val pinDeleteConfirmMessage = "Are you sure you want to delete your security PIN? PIN verification will no longer be required."
+    override val pinDeleteConfirmButton = "Delete"
+    override val pinEnterNewTitle = "Enter New 4-digit PIN"
+    override val pinEnterNewSubtitle = "Choose a secure 4-digit PIN"
+    override val pinConfirmNewTitle = "Confirm New PIN"
+    override val pinConfirmNewSubtitle = "Re-enter the same 4-digit PIN to confirm"
+    override val pinMismatchError = "PINs do not match! Please try again from the beginning."
+    override val pinChangedSuccess = "Security PIN changed and saved successfully 🔒"
+    override val pinDeletedSuccess = "Security PIN removed successfully 🗑️"
+    override val pinCreatedSuccess = "New Security PIN created and saved successfully 🔒"
 
     override val permCardTitle = "System Permissions"
     override val permCardSubtitle = "The following permissions are required for the app to function properly"
@@ -535,7 +720,38 @@ object EnglishStrings : AppStrings {
     override val forgotPinCancel = "Cancel"
     override val forgotPinConfirm = "Reset PIN"
     
-    override val homeGreeting = "Good evening, Boss"
+    override fun getDynamicGreeting(userName: String, hour: Int): String {
+        val cleanName = userName
+            .replace("(Boss)", "")
+            .replace("Boss", "")
+            .replace("(বস)", "")
+            .replace("বস", "")
+            .replace("(", "")
+            .replace(")", "")
+            .trim()
+
+        val periodGreeting = when (hour) {
+            in 5..11 -> "Good morning"
+            in 12..15 -> "Good noon"
+            in 16..17 -> "Good afternoon"
+            in 18..20 -> "Good evening"
+            else -> "Good night"
+        }
+
+        return if (cleanName.isNotBlank()) "$periodGreeting, $cleanName" else periodGreeting
+    }
+
+    override val homeGreeting: String
+        get() = getDynamicGreeting("")
+
+    override val onboardingWelcomeTitle = "Welcome to Focus Shield! 🛡️"
+    override val onboardingWelcomeSubtitle = "To personalize your focus journey, please provide your name and religion:"
+    override val onboardingNameLabel = "Your Name"
+    override val onboardingNamePlaceholder = "e.g. Tanvir Ahmed"
+    override val onboardingReligionLabel = "Your Religion"
+    override val onboardingSubmitButton = "Get Started 🚀"
+    override val onboardingNameRequiredError = "Please enter your name"
+    override val profileLabelReligion = "Religion"
     override val homeSavedTimePrefix = "Today I saved you "
     override val homeMetricsTitle = "Today's Metrics"
     override val homeMetricBlocked = "Blocked Attempts"
@@ -640,6 +856,15 @@ object EnglishStrings : AppStrings {
     override val profileLoginSubmit = "Login Now"
     override val profileRegisterSubmit = "Create Account"
     
+    override val profileSecuritySectionTitle = "Security & Privacy"
+    override val profileProtectedActivityTitle = "Protected Activity"
+    override val profileProtectedActivityDesc = "PIN verification required to view sensitive and restricted activity history"
+    override val profileProtectedActivityUnlock = "Unlock with PIN"
+    override val profileProtectedActivityLocked = "Locked • Authenticate with PIN to view details"
+    override val profileProtectedActivityEmpty = "No sensitive activity recorded"
+    override val profileProtectedActivityLockAgain = "Lock Again"
+    override val profileProtectedActivityClear = "Clear All"
+    
     override val routineCreateTitle = "New Routine"
     override val routineCreateSubtitle = "Create a new focus routine"
     override val routineNameLabel = "Routine Name"
@@ -731,6 +956,31 @@ object EnglishStrings : AppStrings {
     override val timeSliderDelete = "Delete"
     override val timeSliderCancel = "Cancel"
     override val timeSliderSave = "Save Limit"
+
+    // Notification & Alerts
+    override val notificationQuickTitle = "Notifications & Alerts"
+    override val notificationGranted = "Permission active • Alerts enabled"
+    override val notificationNotGranted = "Permission not granted"
+    override val notificationSheetTitle = "Notification & Alert Controls"
+    override val notificationSheetSubtitle = "Control what alerts and updates you receive"
+    override val notificationPermCardTitle = "System Notification Permission"
+    override val notificationPermCardDesc = "Required to send instant alerts when apps or sites are blocked"
+    override val notificationGrantButton = "Grant Permission"
+    override val notificationGrantedChip = "Active"
+    override val notificationToggleBlocking = "Blocking Alert Notifications"
+    override val notificationToggleBlockingDesc = "Receive notifications immediately when restricted apps or shorts are blocked"
+    override val notificationToggleTimer = "Focus Timer & Routine Updates"
+    override val notificationToggleTimerDesc = "Real-time remaining time and session completion updates"
+    override val notificationToggleSecurity = "Security & PIN Alerts"
+    override val notificationToggleSecurityDesc = "Alerts on failed PIN attempts, emergency unlocks, and settings changes"
+    override val notificationToggleReminders = "Daily Streak & Reminders"
+    override val notificationToggleRemindersDesc = "Daily focus goals and discipline encouragement messages"
+    override val notificationTestButton = "Send Test Notification"
+    override val notificationTestSent = "Test notification sent successfully! Check your notification bar."
+    override val notificationAlertsTitle = "Security & Blocking Alerts"
+    override val notificationAlertsEmpty = "No new notifications"
+    override val notificationMarkAllRead = "Mark all as read"
+    override val notificationClearAll = "Clear all alerts"
 }
 
 fun getStrings(language: AppLanguage): AppStrings {

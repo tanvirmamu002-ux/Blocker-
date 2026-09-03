@@ -113,6 +113,13 @@ fun ProfileDialog(
                         color = colors.textMuted,
                         fontSize = 12.sp
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "ধর্ম: ${viewModel.userAccount.religion}",
+                        color = colors.primary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 

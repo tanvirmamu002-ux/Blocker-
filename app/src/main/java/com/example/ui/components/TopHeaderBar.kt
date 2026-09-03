@@ -102,15 +102,17 @@ fun TopHeaderBar(
                     tint = colors.textSecondary,
                     modifier = Modifier.size(20.dp)
                 )
-                // Red badge dot
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(7.dp)
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(colors.alert)
-                )
+                // Red badge dot if unread
+                if (viewModel.unreadNotificationCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(colors.alert)
+                    )
+                }
             }
 
             // User Profile Avatar

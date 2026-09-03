@@ -24,6 +24,8 @@ import com.example.data.NavigationTab
 import com.example.data.RecentActivity
 import com.example.data.SecurityPermission
 import com.example.data.UserAccount
+import com.example.data.AppNotificationItem
+import com.example.util.FocusNotificationHelper
 import com.example.ui.theme.SoftCoral
 import com.example.ui.theme.WarmAmber
 import com.example.ui.theme.CalmBlue
@@ -80,15 +82,18 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     fun toggleProtection() {
         isProtectionActive = !isProtectionActive
         if (isProtectionActive) {
-            activities.add(0, RecentActivity(
-                id = System.currentTimeMillis().toString(),
-                titleBangla = "স্মার্ট প্রোটেকশন চালু করা হয়েছে",
-                titleEnglish = "Smart Protection Activated",
-                timeAgoBangla = "এইমাত্র",
-                timeAgoEnglish = "Just now",
-                isSuccess = true,
-                iconType = "shield"
-            ))
+            recordNewActivity(
+                RecentActivity(
+                    id = System.currentTimeMillis().toString(),
+                    titleBangla = "স্মার্ট প্রোটেকশন চালু করা হয়েছে",
+                    titleEnglish = "Smart Protection Activated",
+                    timeAgoBangla = "এইমাত্র",
+                    timeAgoEnglish = "Just now",
+                    isSuccess = true,
+                    iconType = "shield",
+                    isSensitive = false
+                )
+            )
         }
     }
 
@@ -115,6 +120,151 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
         private set
     var isStrictScreenTimeActive by mutableStateOf(true)
         private set
+
+    // --- One-Time Block State (Persistent 3-hour app lock) ---
+    var isOneTimeBlockSelectionDialogVisible by mutableStateOf(false)
+    var isOneTimeBlockConfirmationVisible by mutableStateOf(false)
+    var selectedAppForOneTimeBlock by mutableStateOf<com.example.util.AppItem?>(null)
+    var oneTimeBlockedAppName by mutableStateOf<String?>(null)
+        private set
+    var oneTimeBlockedPackageName by mutableStateOf<String?>(null)
+        private set
+    var remainingOneTimeBlockSeconds by mutableIntStateOf(0)
+        private set
+    private var oneTimeBlockTickerJob: Job? = null
+
+    fun checkAndRestoreOneTimeBlock(context: Context) {
+        val prefs = FocusLockPreferences.getInstance(context)
+        if (prefs.isOneTimeBlockActive()) {
+            val pkg = prefs.getOneTimeBlockPackage()
+            val name = prefs.getOneTimeBlockAppName() ?: pkg
+            val remainingMs = prefs.getOneTimeBlockRemainingMs()
+            if (pkg != null && remainingMs > 0L) {
+                oneTimeBlockedPackageName = pkg
+                oneTimeBlockedAppName = name
+                isQuickBlockNowActive = true
+                remainingOneTimeBlockSeconds = (remainingMs / 1000).toInt()
+                startOneTimeBlockTicker(context)
+            } else {
+                clearOneTimeBlockState(context)
+            }
+        } else {
+            clearOneTimeBlockState(context)
+        }
+    }
+
+    private fun startOneTimeBlockTicker(context: Context) {
+        oneTimeBlockTickerJob?.cancel()
+        oneTimeBlockTickerJob = viewModelScope.launch {
+            val prefs = FocusLockPreferences.getInstance(context)
+            while (isActive) {
+                val remainingMs = prefs.getOneTimeBlockRemainingMs()
+                if (remainingMs <= 0L) {
+                    val finishedApp = oneTimeBlockedAppName ?: "অ্যাপ"
+                    clearOneTimeBlockState(context)
+                    recordNewActivity(
+                        RecentActivity(
+                            id = System.currentTimeMillis().toString(),
+                            titleBangla = "$finishedApp-এর ৩ ঘণ্টার ব্লক সফলভাবে সম্পন্ন হয়েছে",
+                            titleEnglish = "3h Block ended for $finishedApp",
+                            timeAgoBangla = "এইমাত্র",
+                            timeAgoEnglish = "Just now",
+                            isSuccess = true,
+                            iconType = "shield",
+                            isSensitive = false
+                        ),
+                        context
+                    )
+                    showToast("$finishedApp-এর ৩ ঘণ্টার ব্লক শেষ হয়েছে")
+                    break
+                }
+                remainingOneTimeBlockSeconds = (remainingMs / 1000).toInt()
+                delay(1000)
+            }
+        }
+    }
+
+    fun triggerOneTimeBlockQuickAction(context: Context) {
+        val prefs = FocusLockPreferences.getInstance(context)
+        if (prefs.isOneTimeBlockActive()) {
+            val appName = oneTimeBlockedAppName ?: "অ্যাপ"
+            val minsLeft = (prefs.getOneTimeBlockRemainingMs() / (60 * 1000)).toInt()
+            val hours = minsLeft / 60
+            val mins = minsLeft % 60
+            val timeText = if (hours > 0) "$hours ঘণ্টা $mins মিনিট" else "$mins মিনিট"
+            showToast("\"$appName\" বর্তমানে $timeText-এর জন্য ব্লক রয়েছে 🔒")
+            return
+        }
+
+        if (!FocusPermissionHelper.isAccessibilityPermissionGranted(context)) {
+            showToast("One-Time Block সক্রিয় করতে অ্যাক্সেসিবিলিটি পারমিশন প্রয়োজন")
+            scrollToPermissionsRequested = true
+            selectTab(NavigationTab.SETTINGS)
+            return
+        }
+
+        isOneTimeBlockSelectionDialogVisible = true
+    }
+
+    fun selectAppForOneTimeBlock(app: com.example.util.AppItem) {
+        selectedAppForOneTimeBlock = app
+        isOneTimeBlockSelectionDialogVisible = false
+        isOneTimeBlockConfirmationVisible = true
+    }
+
+    fun confirmOneTimeBlock(context: Context) {
+        val app = selectedAppForOneTimeBlock ?: return
+        val prefs = FocusLockPreferences.getInstance(context)
+        prefs.saveOneTimeBlock(packageName = app.packageName, appName = app.name, durationHours = 3)
+
+        oneTimeBlockedPackageName = app.packageName
+        oneTimeBlockedAppName = app.name
+        isQuickBlockNowActive = true
+        remainingOneTimeBlockSeconds = 3 * 3600
+        isOneTimeBlockConfirmationVisible = false
+        selectedAppForOneTimeBlock = null
+
+        startOneTimeBlockTicker(context)
+
+        blockedAttemptsToday += 1
+        recordNewActivity(
+            RecentActivity(
+                id = System.currentTimeMillis().toString(),
+                titleBangla = "${app.name} ৩ ঘণ্টার জন্য তাৎক্ষণিক ব্লক করা হলো",
+                titleEnglish = "${app.name} blocked for 3 hours",
+                timeAgoBangla = "এইমাত্র",
+                timeAgoEnglish = "Just now",
+                isSuccess = true,
+                iconType = "blocked",
+                isSensitive = false
+            ),
+            context
+        )
+
+        showToast("${app.name} সফলভাবে ৩ ঘণ্টার জন্য ব্লক করা হয়েছে 🔒")
+    }
+
+    fun cancelActiveOneTimeBlock(context: Context) {
+        val appName = oneTimeBlockedAppName ?: "অ্যাপ"
+        clearOneTimeBlockState(context)
+        showToast("$appName-এর ব্লক বাতিল করা হলো")
+    }
+
+    private fun clearOneTimeBlockState(context: Context) {
+        oneTimeBlockTickerJob?.cancel()
+        val prefs = FocusLockPreferences.getInstance(context)
+        prefs.clearOneTimeBlock()
+        oneTimeBlockedPackageName = null
+        oneTimeBlockedAppName = null
+        isQuickBlockNowActive = false
+        remainingOneTimeBlockSeconds = 0
+    }
+
+    fun closeOneTimeBlockDialogs() {
+        isOneTimeBlockSelectionDialogVisible = false
+        isOneTimeBlockConfirmationVisible = false
+        selectedAppForOneTimeBlock = null
+    }
 
     // --- Real Focus Lock Functionality & Persistent State Machine ---
     var focusLockState by mutableStateOf(FocusLockState.IDLE)
@@ -204,17 +354,29 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
         startFocusLockTicker(context)
 
         blockedAttemptsToday += 1
-        activities.add(0, RecentActivity(
-            id = System.currentTimeMillis().toString(),
-            titleBangla = "Focus Lock সক্রিয় ($durationMinutes মিনিট)",
-            titleEnglish = "Focus Lock Active ($durationMinutes mins)",
-            timeAgoBangla = "এইমাত্র",
-            timeAgoEnglish = "Just now",
-            isSuccess = true,
-            iconType = "shield"
-        ))
+        recordNewActivity(
+            RecentActivity(
+                id = System.currentTimeMillis().toString(),
+                titleBangla = "Focus Lock সক্রিয় ($durationMinutes মিনিট)",
+                titleEnglish = "Focus Lock Active ($durationMinutes mins)",
+                timeAgoBangla = "এইমাত্র",
+                timeAgoEnglish = "Just now",
+                isSuccess = true,
+                iconType = "shield",
+                isSensitive = false
+            ),
+            context
+        )
 
         showToast("Focus Lock $durationMinutes মিনিটের জন্য সক্রিয় করা হলো 🔒")
+
+        if (notifTimerUpdatesEnabled) {
+            FocusNotificationHelper.sendTimerNotification(
+                context = context,
+                title = "ফোকাস লক সক্রিয় 🔒",
+                message = "$durationMinutes মিনিটের ফোকাস সেশন শুরু হয়েছে। একাগ্রতা বজায় রাখুন।"
+            )
+        }
     }
 
     private fun startFocusLockTicker(context: Context) {
@@ -231,15 +393,34 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
                     focusSessionsToday += 1
                     isFocusLockCompletionDialogVisible = true
 
-                    activities.add(0, RecentActivity(
-                        id = System.currentTimeMillis().toString(),
-                        titleBangla = "${focusLockConfig.durationMinutes} মিনিটের ফোকাস লক সফল!",
-                        titleEnglish = "${focusLockConfig.durationMinutes}m Focus Lock Completed!",
-                        timeAgoBangla = "এইমাত্র",
-                        timeAgoEnglish = "Just now",
-                        isSuccess = true,
-                        iconType = "session"
-                    ))
+                    recordNewActivity(
+                        RecentActivity(
+                            id = System.currentTimeMillis().toString(),
+                            titleBangla = "${focusLockConfig.durationMinutes} মিনিটের ফোকাস লক সফল!",
+                            titleEnglish = "${focusLockConfig.durationMinutes}m Focus Lock Completed!",
+                            timeAgoBangla = "এইমাত্র",
+                            timeAgoEnglish = "Just now",
+                            isSuccess = true,
+                            iconType = "session",
+                            isSensitive = false
+                        ),
+                        context
+                    )
+
+                    if (notifTimerUpdatesEnabled) {
+                        FocusNotificationHelper.sendTimerNotification(
+                            context = context,
+                            title = "ফোকাস সেশন সফলভাবে সম্পন্ন! 🎉",
+                            message = "${focusLockConfig.durationMinutes} মিনিটের ফোকাস সেশন সফলভাবে শেষ হয়েছে। অভিনন্দন!"
+                        )
+                    }
+                    addNotificationAlert(
+                        title = "${focusLockConfig.durationMinutes} মিনিটের ফোকাস সেশন সম্পন্ন",
+                        subtitle = "ফোকাস লক সফল • সময় বাঁচানো হয়েছে",
+                        type = "timer",
+                        postSystemNotification = false,
+                        context = context
+                    )
                     break
                 }
                 remainingFocusLockSeconds = (remainingMs / 1000).toInt()
@@ -255,15 +436,34 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
         focusLockTickerJob?.cancel()
         isFocusLockEmergencyDialogVisible = false
 
-        activities.add(0, RecentActivity(
-            id = System.currentTimeMillis().toString(),
-            titleBangla = "ইমার্জেন্সি আনলক: $reason",
-            titleEnglish = "Emergency Unlock: $reason",
-            timeAgoBangla = "এইমাত্র",
-            timeAgoEnglish = "Just now",
-            isSuccess = false,
-            iconType = "blocked"
-        ))
+        recordNewActivity(
+            RecentActivity(
+                id = System.currentTimeMillis().toString(),
+                titleBangla = "ইমার্জেন্সি আনলক: $reason",
+                titleEnglish = "Emergency Unlock: $reason",
+                timeAgoBangla = "এইমাত্র",
+                timeAgoEnglish = "Just now",
+                isSuccess = false,
+                iconType = "blocked",
+                isSensitive = false
+            ),
+            context
+        )
+
+        if (notifSecurityAlertsEnabled) {
+            FocusNotificationHelper.sendSecurityNotification(
+                context = context,
+                title = "জরুরি আনলক সক্রিয় ⚠️",
+                message = "ফোকাস সেশন নির্ধারিত সময়ের আগেই আনলক করা হয়েছে। কারণ: $reason"
+            )
+        }
+        addNotificationAlert(
+            title = "জরুরি আনলক সক্রিয় করা হয়েছে",
+            subtitle = "কারণ: $reason",
+            type = "security",
+            postSystemNotification = false,
+            context = context
+        )
 
         showToast("ইমার্জেন্সি আনলক প্রোটোকল কার্যকর করা হয়েছে")
     }
@@ -278,7 +478,37 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     private var contextRef: Context? = null
     fun bindContext(context: Context) {
         contextRef = context
+        val prefs = FocusLockPreferences.getInstance(context)
+        appThemeMode = prefs.getAppThemeMode()
+        isPinConfigured = prefs.isPinConfigured()
+        currentPin = prefs.getSecurityPin()
         appLanguage = AppLanguageManager.getLanguage(context)
+        notifBlockingAlertsEnabled = prefs.getNotifBlocking()
+        notifTimerUpdatesEnabled = prefs.getNotifTimer()
+        notifSecurityAlertsEnabled = prefs.getNotifSecurity()
+        notifRemindersEnabled = prefs.getNotifReminders()
+        FocusNotificationHelper.initNotificationChannels(context)
+        initDefaultNotificationsIfNeeded()
+
+        // Load persisted user profile if available
+        val savedName = prefs.getUserName()
+        val savedReligion = prefs.getUserReligion()
+        if (!savedName.isNullOrBlank()) {
+            val initials = savedName.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
+            userAccount = userAccount.copy(
+                name = savedName,
+                religion = savedReligion ?: "ইসলাম",
+                avatarInitials = if (initials.isNotBlank()) initials else "FS"
+            )
+        }
+
+        // Show welcome onboarding dialog immediately on first app open
+        if (!prefs.isOnboardingCompleted()) {
+            isOnboardingDialogVisible = true
+        }
+
+        checkAndRestoreFocusLock(context)
+        checkAndRestoreOneTimeBlock(context)
         loadPerAppLimits(context)
         refreshRealUsageAndAnalytics(context)
     }
@@ -392,56 +622,62 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     }
 
     // --- Recent Activities ---
-    val activities = mutableStateListOf(
-        RecentActivity(
-            id = "1",
-            titleBangla = "YouTube Shorts প্রতিহত করা হয়েছে",
-            titleEnglish = "YouTube Shorts Blocked",
-            timeAgoBangla = "১০ মিনিট আগে",
-            timeAgoEnglish = "10 mins ago",
-            isSuccess = false,
-            iconType = "blocked"
-        ),
-        RecentActivity(
-            id = "2",
-            titleBangla = "Instagram Reels ব্লকড",
-            titleEnglish = "Instagram Reels Blocked",
-            timeAgoBangla = "২৫ মিনিট আগে",
-            timeAgoEnglish = "25 mins ago",
-            isSuccess = false,
-            iconType = "blocked"
-        ),
-        RecentActivity(
-            id = "3",
-            titleBangla = "Gambling ওয়েবসাইট ব্লকড",
-            titleEnglish = "Gambling Website Blocked",
-            timeAgoBangla = "৪ ঘণ্টা আগে",
-            timeAgoEnglish = "4 hours ago",
-            isSuccess = false,
-            iconType = "blocked"
-        ),
-        RecentActivity(
-            id = "4",
-            titleBangla = "৪৫ মিনিটের ফোকাস সেশন সফল!",
-            titleEnglish = "45-min Focus Session Completed!",
-            timeAgoBangla = "৩ ঘণ্টা আগে",
-            timeAgoEnglish = "3 hours ago",
-            isSuccess = true,
-            iconType = "session"
-        ),
-        RecentActivity(
-            id = "5",
-            titleBangla = "TikTok অ্যাপ খোলার চেষ্টা প্রতিহত",
-            titleEnglish = "TikTok launch attempt prevented",
-            timeAgoBangla = "৫ ঘণ্টা আগে",
-            timeAgoEnglish = "5 hours ago",
-            isSuccess = false,
-            iconType = "blocked"
-        )
-    )
+    val activities = mutableStateListOf<RecentActivity>()
+    val protectedActivities = mutableStateListOf<RecentActivity>()
+    var isProtectedActivityUnlocked by mutableStateOf(false)
+        private set
 
-    fun clearActivities() {
+    fun lockProtectedActivity() {
+        isProtectedActivityUnlocked = false
+    }
+
+    fun clearProtectedActivities(context: Context? = null) {
+        protectedActivities.clear()
+        val targetContext = context ?: this.context
+        FocusLockPreferences.getInstance(targetContext).saveProtectedActivities(emptyList())
+    }
+
+    fun clearActivities(context: Context? = null) {
         activities.clear()
+        val targetContext = context ?: this.context
+        targetContext?.let {
+            FocusLockPreferences.getInstance(it).saveActivities(emptyList())
+        }
+    }
+
+    fun recordNewActivity(activity: RecentActivity, context: Context? = null) {
+        val targetContext = context ?: this.context
+        if (activity.isSensitive) {
+            protectedActivities.add(0, activity)
+            targetContext?.let {
+                FocusLockPreferences.getInstance(it).saveProtectedActivities(protectedActivities.toList())
+            }
+        } else {
+            activities.add(0, activity)
+            targetContext?.let {
+                FocusLockPreferences.getInstance(it).saveActivities(activities.toList())
+            }
+        }
+    }
+
+    private var isActivitiesInitialized = false
+
+    fun checkAndRestoreActivities(context: Context) {
+        if (isActivitiesInitialized) return
+        isActivitiesInitialized = true
+
+        val prefs = FocusLockPreferences.getInstance(context)
+        val savedActivities = prefs.getActivities()
+        activities.clear()
+        if (savedActivities.isNotEmpty()) {
+            activities.addAll(savedActivities)
+        }
+
+        val savedProtected = prefs.getProtectedActivities()
+        protectedActivities.clear()
+        if (savedProtected.isNotEmpty()) {
+            protectedActivities.addAll(savedProtected)
+        }
     }
 
     // --- Focus Timer (Pomodoro / Deep Work) ---
@@ -498,15 +734,18 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
             if (remainingSeconds <= 0) {
                 isTimerRunning = false
                 focusSessionsToday += 1
-                activities.add(0, RecentActivity(
-                    id = System.currentTimeMillis().toString(),
-                    titleBangla = "$timerPresetMinutes মিনিটের $selectedTimerMode সফল!",
-                    titleEnglish = "$timerPresetMinutes min $selectedTimerMode Completed!",
-                    timeAgoBangla = "এইমাত্র",
-                    timeAgoEnglish = "Just now",
-                    isSuccess = true,
-                    iconType = "session"
-                ))
+                recordNewActivity(
+                    RecentActivity(
+                        id = System.currentTimeMillis().toString(),
+                        titleBangla = "$timerPresetMinutes মিনিটের $selectedTimerMode সফল!",
+                        titleEnglish = "$timerPresetMinutes min $selectedTimerMode Completed!",
+                        timeAgoBangla = "এইমাত্র",
+                        timeAgoEnglish = "Just now",
+                        isSuccess = true,
+                        iconType = "session",
+                        isSensitive = false
+                    )
+                )
             }
         }
     }
@@ -632,57 +871,86 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     }
 
     // --- Custom Blacklist Domains & Keywords ---
-    val customDomains = mutableStateListOf(
-        BlockedDomain("1", "youtube.com/shorts", 64, true, "ডিফল্ট"),
-        BlockedDomain("2", "instagram.com/reels", 46, true, "ডিফল্ট"),
-        BlockedDomain("3", "tiktok.com", 28, true, "ডিফল্ট"),
-        BlockedDomain("4", "facebook.com", 22, true, "ডিফল্ট"),
-        BlockedDomain("5", "x.com", 15, true, "গতকাল যুক্ত")
-    )
+    val customDomains = mutableStateListOf<BlockedDomain>()
+    val customKeywords = mutableStateListOf<String>()
 
-    val customKeywords = mutableStateListOf(
-        "casino",
-        "betting",
-        "adult",
-        "porn",
-        "reels",
-        "shorts",
-        "viral",
-        "dating"
-    )
+    fun cleanAndValidateDomain(domainInput: String): String? {
+        val cleaned = domainInput.trim().lowercase()
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .removePrefix("www.")
+            .trimEnd('/')
 
-    fun addCustomDomain(domainInput: String) {
-        val cleaned = domainInput.trim().lowercase().removePrefix("https://").removePrefix("http://")
-        if (cleaned.isNotEmpty() && customDomains.none { it.domain == cleaned }) {
-            customDomains.add(0, BlockedDomain(
-                id = System.currentTimeMillis().toString(),
-                domain = cleaned,
-                blockedCount = 0,
-                isCustom = true,
-                addedTimeAgo = "এইমাত্র যুক্ত"
-            ))
-            showToast("$cleaned সফলভাবে ব্লকলিস্টে যোগ ও সংরক্ষণ করা হয়েছে")
+        if (cleaned.isEmpty()) return null
+
+        // Disallow spaces or Bengali script in domain name
+        if (cleaned.contains(" ") || Regex("[\u0980-\u09FF]").containsMatchIn(cleaned)) {
+            return null
         }
+
+        // Must match a valid domain/URL format with valid TLD
+        val host = cleaned.substringBefore('/')
+        val domainPattern = Regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\\.[a-z]{2,}$")
+        if (!domainPattern.matches(host)) {
+            return null
+        }
+        return cleaned
+    }
+
+    fun addCustomDomain(domainInput: String): Boolean {
+        val cleaned = cleanAndValidateDomain(domainInput)
+        if (cleaned == null) {
+            showToast("দয়া করে সঠিক ওয়েবসাইট লিংক বা ডোমেইন লিখুন (যেমন: examplewebsite.com)")
+            return false
+        }
+        if (customDomains.any { it.domain.equals(cleaned, ignoreCase = true) }) {
+            showToast("এই ওয়েবসাইটটি ইতোমধ্যে ব্লক তালিকায় সংরক্ষিত আছে")
+            return false
+        }
+        val prefs = com.example.util.FocusLockPreferences.getInstance(context)
+        customDomains.add(0, BlockedDomain(
+            id = System.currentTimeMillis().toString(),
+            domain = cleaned,
+            blockedCount = 0,
+            isCustom = true,
+            addedTimeAgo = "এইমাত্র যুক্ত"
+        ))
+        prefs.saveCustomDomains(customDomains)
+        showToast("$cleaned সফলভাবে ব্লকলিস্টে সংরক্ষণ করা হয়েছে 🔒")
+        return true
     }
 
     fun removeCustomDomain(id: String) {
         val item = customDomains.find { it.id == id }
         customDomains.removeAll { it.id == id }
+        val prefs = com.example.util.FocusLockPreferences.getInstance(context)
+        prefs.saveCustomDomains(customDomains)
         if (item != null) {
             showToast("${item.domain} তালিকা থেকে মুছে ফেলা হয়েছে")
         }
     }
 
-    fun addCustomKeyword(keyword: String) {
-        val cleaned = keyword.trim().lowercase()
-        if (cleaned.isNotEmpty() && !customKeywords.contains(cleaned)) {
-            customKeywords.add(0, cleaned)
-            showToast("\"$cleaned\" কিওয়ার্ড সফলভাবে ব্লক ও সংরক্ষণ করা হয়েছে")
+    fun addCustomKeyword(keywordInput: String): Boolean {
+        val cleaned = keywordInput.trim().lowercase()
+        if (cleaned.isEmpty()) {
+            showToast("দয়া করে একটি কিওয়ার্ড লিখুন")
+            return false
         }
+        if (customKeywords.any { it.equals(cleaned, ignoreCase = true) }) {
+            showToast("\"$cleaned\" কিওয়ার্ডটি ইতোমধ্যে তালিকায় আছে")
+            return false
+        }
+        val prefs = com.example.util.FocusLockPreferences.getInstance(context)
+        customKeywords.add(0, cleaned)
+        prefs.saveCustomKeywords(customKeywords)
+        showToast("\"$cleaned\" কিওয়ার্ড সফলভাবে ব্লকলিস্টে সংরক্ষণ করা হয়েছে")
+        return true
     }
 
     fun removeCustomKeyword(keyword: String) {
         customKeywords.remove(keyword)
+        val prefs = com.example.util.FocusLockPreferences.getInstance(context)
+        prefs.saveCustomKeywords(customKeywords)
         showToast("\"$keyword\" কিওয়ার্ড ব্লকলিস্ট থেকে মুছে ফেলা হয়েছে")
     }
 
@@ -696,6 +964,8 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     init {
         val prefs = com.example.util.FocusLockPreferences.getInstance(context)
         focusRoutines.addAll(prefs.getRoutines())
+        customDomains.addAll(prefs.getCustomDomains())
+        customKeywords.addAll(prefs.getCustomKeywords())
     }
 
     fun toggleRoutine(id: String) {
@@ -889,35 +1159,75 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     }
 
     // --- User Account State ---
+    var isOnboardingDialogVisible by mutableStateOf(false)
+
     var userAccount by mutableStateOf(
         UserAccount(
             isLoggedIn = true,
-            name = "John Doe (Boss)",
+            name = "John Doe",
             email = "focus.guardian@example.com",
             phone = "+৮৮০ ১৭১২-৩৪৫৬৭৮",
             bio = "ফোকাস ও আত্মউন্নয়নের পথে নিয়োজিত",
             isPremium = true,
             avatarInitials = "JD",
             avatarUri = null,
-            memberSince = "জানুয়ারি ২০২৬"
+            memberSince = "জানুয়ারি ২০২৬",
+            religion = "ইসলাম"
         )
     )
         private set
+
+    fun completeOnboarding(name: String, religion: String) {
+        val trimmedName = name.trim()
+        val trimmedReligion = religion.trim().ifBlank { "ইসলাম" }
+        val initials = trimmedName.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
+
+        userAccount = userAccount.copy(
+            name = trimmedName,
+            religion = trimmedReligion,
+            avatarInitials = if (initials.isNotBlank()) initials else "FS"
+        )
+        isOnboardingDialogVisible = false
+
+        contextRef?.let { ctx ->
+            val prefs = FocusLockPreferences.getInstance(ctx)
+            prefs.saveUserName(trimmedName)
+            prefs.saveUserReligion(trimmedReligion)
+            prefs.setOnboardingCompleted(true)
+        }
+
+        val welcomeMsg = if (appLanguage == AppLanguage.BENGALI) {
+            "স্বাগতম, $trimmedName! আপনার ফোকাস প্রোফাইল সফলভাবে তৈরি হয়েছে।"
+        } else {
+            "Welcome, $trimmedName! Your focus profile is ready."
+        }
+        showToast(welcomeMsg)
+    }
+
+    fun showOnboardingSetup() {
+        isOnboardingDialogVisible = true
+    }
 
     fun setProfileAvatarUri(uri: String?) {
         userAccount = userAccount.copy(avatarUri = uri)
         showToast(if (uri != null) "প্রোফাইল ছবি সফলভাবে আপলোড করা হয়েছে!" else "ছবি সরানো হয়েছে")
     }
 
-    fun updateUserProfile(name: String, email: String, phone: String, bio: String) {
+    fun updateUserProfile(name: String, email: String, phone: String, bio: String, religion: String = userAccount.religion) {
         val initials = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
         userAccount = userAccount.copy(
             name = name,
             email = email,
             phone = phone,
             bio = bio,
+            religion = religion,
             avatarInitials = if (initials.isNotEmpty()) initials else userAccount.avatarInitials
         )
+        contextRef?.let { ctx ->
+            val prefs = FocusLockPreferences.getInstance(ctx)
+            prefs.saveUserName(name)
+            prefs.saveUserReligion(religion)
+        }
         showToast("প্রোফাইল সফলভাবে আপডেট করা হয়েছে!")
     }
 
@@ -962,8 +1272,12 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     var appThemeMode by mutableStateOf(AppThemeMode.LIGHT)
         private set
 
-    fun setAppTheme(mode: AppThemeMode) {
+    fun setAppTheme(mode: AppThemeMode, context: Context? = null) {
         appThemeMode = mode
+        val targetContext = context ?: contextRef
+        targetContext?.let {
+            FocusLockPreferences.getInstance(it).saveAppThemeMode(mode)
+        }
         showToast("${mode.titleBangla} সক্রিয় করা হয়েছে!")
     }
 
@@ -974,9 +1288,13 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
         private set
     var enteredPin by mutableStateOf("")
         private set
+    var pendingNewPin by mutableStateOf("")
+        private set
     var pinErrorMessage by mutableStateOf<String?>(null)
         private set
     var isPinBottomSheetVisible by mutableStateOf(false)
+        private set
+    var showPinManageOptionsDialog by mutableStateOf(false)
         private set
     var currentPinAction by mutableStateOf(PinAction.VERIFY)
         private set
@@ -988,12 +1306,48 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
         RESET_PIN,
         DISABLE_STRICT_MODE,
         UNLOCK_STRICT_TIMER,
-        EMERGENCY_UNLOCK
+        EMERGENCY_UNLOCK,
+        VIEW_PROTECTED_ACTIVITY,
+        SETTINGS_VERIFY_CURRENT,
+        SETTINGS_ENTER_NEW,
+        SETTINGS_CONFIRM_NEW
+    }
+
+    fun openPinManageOptionsDialog() {
+        showPinManageOptionsDialog = true
+    }
+
+    fun dismissPinManageOptionsDialog() {
+        showPinManageOptionsDialog = false
+    }
+
+    fun saveNewPin(pin: String, context: Context? = null) {
+        currentPin = pin
+        isPinConfigured = true
+        val targetContext = context ?: contextRef
+        targetContext?.let {
+            FocusLockPreferences.getInstance(it).saveSecurityPin(pin)
+        }
+    }
+
+    fun deletePin(context: Context? = null) {
+        currentPin = ""
+        isPinConfigured = false
+        val targetContext = context ?: contextRef
+        targetContext?.let {
+            FocusLockPreferences.getInstance(it).deleteSecurityPin()
+        }
+        val msg = if (appLanguage == AppLanguage.BENGALI) 
+            "সিকিউরিটি পিন সফলভাবে মুছে ফেলা হয়েছে 🗑️" 
+        else 
+            "Security PIN removed successfully 🗑️"
+        showToast(msg)
     }
 
     fun showPinBottomSheet(action: PinAction) {
         currentPinAction = action
         enteredPin = ""
+        pendingNewPin = ""
         pinErrorMessage = null
         isPinBottomSheetVisible = true
     }
@@ -1001,6 +1355,7 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     fun hidePinBottomSheet() {
         isPinBottomSheetVisible = false
         enteredPin = ""
+        pendingNewPin = ""
         pinErrorMessage = null
     }
 
@@ -1021,44 +1376,97 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     }
 
     private fun validateEnteredPin() {
-        if (currentPinAction == PinAction.CREATE_PIN) {
-            currentPin = enteredPin
-            isPinConfigured = true
-            hidePinBottomSheet()
-            showToast("নতুন পিন সফলভাবে তৈরি করা হয়েছে!")
+        // Step 1 in Settings: Verify Current PIN before showing Reset/Delete options
+        if (currentPinAction == PinAction.SETTINGS_VERIFY_CURRENT) {
+            if (enteredPin == currentPin) {
+                hidePinBottomSheet()
+                showPinManageOptionsDialog = true
+            } else {
+                pinErrorMessage = if (appLanguage == AppLanguage.BENGALI) "ভুল পিন! আবার চেষ্টা করুন।" else "Incorrect PIN! Try again."
+                enteredPin = ""
+            }
             return
         }
 
+        // Step 2a: Enter New 4-digit PIN
+        if (currentPinAction == PinAction.SETTINGS_ENTER_NEW || currentPinAction == PinAction.CREATE_PIN) {
+            pendingNewPin = enteredPin
+            enteredPin = ""
+            pinErrorMessage = null
+            currentPinAction = PinAction.SETTINGS_CONFIRM_NEW
+            return
+        }
+
+        // Step 2b: Confirm New 4-digit PIN
+        if (currentPinAction == PinAction.SETTINGS_CONFIRM_NEW) {
+            if (enteredPin == pendingNewPin) {
+                val newPin = pendingNewPin
+                saveNewPin(newPin, contextRef)
+                hidePinBottomSheet()
+                val successMsg = if (appLanguage == AppLanguage.BENGALI) 
+                    "নতুন সিকিউরিটি পিন সফলভাবে সংরক্ষিত হয়েছে 🔒" 
+                else 
+                    "New Security PIN created & saved successfully 🔒"
+                showToast(successMsg)
+            } else {
+                pinErrorMessage = if (appLanguage == AppLanguage.BENGALI) 
+                    "পিন দুটি মেলেনি! প্রথম থেকে আবার দিন।" 
+                else 
+                    "PINs do not match! Please enter again."
+                enteredPin = ""
+                pendingNewPin = ""
+                currentPinAction = PinAction.SETTINGS_ENTER_NEW
+            }
+            return
+        }
+
+        // Emergency forgot pin recovery
         if (currentPinAction == PinAction.RESET_PIN || currentPinAction == PinAction.CHANGE_PIN) {
-            currentPin = enteredPin
-            isPinConfigured = true
+            pendingNewPin = enteredPin
+            enteredPin = ""
+            pinErrorMessage = null
+            currentPinAction = PinAction.SETTINGS_CONFIRM_NEW
+            return
+        }
+
+        // Other Protected Actions (Strict Mode, Timer Unlock, Emergency, Protected Activity)
+        if (!isPinConfigured) {
+            // PIN is deleted/disabled - allow direct access
+            performProtectedActionSuccess()
             hidePinBottomSheet()
-            showToast("পিন সফলভাবে পরিবর্তন / রিসেট করা হয়েছে!")
             return
         }
 
         if (enteredPin == currentPin) {
-            when (currentPinAction) {
-                PinAction.DISABLE_STRICT_MODE -> {
-                    isStrictGlobalActive = false
-                    showToast("স্ট্রিক্ট মোড নিষ্ক্রিয় করা হয়েছে")
-                }
-                PinAction.UNLOCK_STRICT_TIMER -> {
-                    pauseTimer()
-                    showToast("ফোকাস টাইমার আনলক করা হয়েছে")
-                }
-                PinAction.EMERGENCY_UNLOCK -> {
-                    isProtectionActive = false
-                    showToast("ইমার্জেন্সি আনলক সক্রিয় (১৫ মিনিট)")
-                }
-                else -> {
-                    showToast("পিন সঠিক হয়েছে!")
-                }
-            }
+            performProtectedActionSuccess()
             hidePinBottomSheet()
         } else {
-            pinErrorMessage = "ভুল পিন! আবার চেষ্টা করুন।"
+            pinErrorMessage = if (appLanguage == AppLanguage.BENGALI) "ভুল পিন! আবার চেষ্টা করুন।" else "Incorrect PIN! Try again."
             enteredPin = ""
+        }
+    }
+
+    private fun performProtectedActionSuccess() {
+        when (currentPinAction) {
+            PinAction.DISABLE_STRICT_MODE -> {
+                isStrictGlobalActive = false
+                showToast("স্ট্রিক্ট মোড নিষ্ক্রিয় করা হয়েছে")
+            }
+            PinAction.UNLOCK_STRICT_TIMER -> {
+                pauseTimer()
+                showToast("ফোকাস টাইমার আনলক করা হয়েছে")
+            }
+            PinAction.EMERGENCY_UNLOCK -> {
+                isProtectionActive = false
+                showToast("ইমার্জেন্সি আনলক সক্রিয় (১৫ মিনিট)")
+            }
+            PinAction.VIEW_PROTECTED_ACTIVITY -> {
+                isProtectedActivityUnlocked = true
+                showToast("সুরক্ষিত অ্যাক্টিভিটি আনলক করা হয়েছে 🔓")
+            }
+            else -> {
+                showToast("পিন সঠিক হয়েছে!")
+            }
         }
     }
 
@@ -1194,6 +1602,142 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
     var isFocusLockPermissionDialogVisible by mutableStateOf(false)
     var isFocusLockEmergencyDialogVisible by mutableStateOf(false)
     var isFocusLockCompletionDialogVisible by mutableStateOf(false)
+
+    // --- Notification & Alerts System ---
+    val notificationAlerts = mutableStateListOf<AppNotificationItem>()
+
+    val unreadNotificationCount: Int
+        get() = notificationAlerts.count { !it.isRead }
+
+    var notifBlockingAlertsEnabled by mutableStateOf(true)
+        private set
+    var notifTimerUpdatesEnabled by mutableStateOf(true)
+        private set
+    var notifSecurityAlertsEnabled by mutableStateOf(true)
+        private set
+    var notifRemindersEnabled by mutableStateOf(true)
+        private set
+
+    var showNotificationSettingsSheet by mutableStateOf(false)
+
+    fun initDefaultNotificationsIfNeeded() {
+        if (notificationAlerts.isEmpty()) {
+            notificationAlerts.addAll(
+                listOf(
+                    AppNotificationItem(
+                        title = "YouTube Shorts প্রতিহত করা হয়েছে",
+                        subtitle = "১০ মিনিট আগে • অটো-ব্লকার",
+                        timeAgo = "১০ মি. আগে",
+                        type = "alert",
+                        isRead = false
+                    ),
+                    AppNotificationItem(
+                        title = "Instagram Reels ফিল্টার সক্রিয়",
+                        subtitle = "২৫ মিনিট আগে • সোশ্যাল শিল্ড",
+                        timeAgo = "২৫ মি. আগে",
+                        type = "shield",
+                        isRead = false
+                    ),
+                    AppNotificationItem(
+                        title = "অনলাইন বেটিং সাইট রিকোয়েস্ট ব্লকড",
+                        subtitle = "৪ ঘণ্টা আগে • ফিশিং গার্ড",
+                        timeAgo = "৪ ঘ. আগে",
+                        type = "alert",
+                        isRead = false
+                    ),
+                    AppNotificationItem(
+                        title = "স্ট্রিক্ট মোড নোটিফিকেশন পার্টনারকে পাঠানো হয়েছে",
+                        subtitle = "গতকাল রাত ১১:৩০",
+                        timeAgo = "গতকাল",
+                        type = "security",
+                        isRead = true
+                    )
+                )
+            )
+        }
+    }
+
+    fun markAllNotificationsAsRead() {
+        val updated = notificationAlerts.map { it.copy(isRead = true) }
+        notificationAlerts.clear()
+        notificationAlerts.addAll(updated)
+        showToast("সব নোটিফিকেশন পঠিত হিসেবে চিহ্নিত করা হয়েছে")
+    }
+
+    fun clearAllNotifications() {
+        notificationAlerts.clear()
+        showToast("সব নোটিফিকেশন অ্যালার্ট মুছে ফেলা হয়েছে")
+    }
+
+    fun deleteNotification(id: String) {
+        notificationAlerts.removeAll { it.id == id }
+    }
+
+    fun addNotificationAlert(
+        title: String,
+        subtitle: String,
+        type: String = "alert",
+        postSystemNotification: Boolean = true,
+        context: Context? = null
+    ) {
+        val item = AppNotificationItem(
+            title = title,
+            subtitle = subtitle,
+            timeAgo = "এখনই",
+            type = type,
+            isRead = false
+        )
+        notificationAlerts.add(0, item)
+
+        if (postSystemNotification) {
+            val ctx = context ?: contextRef
+            if (ctx != null) {
+                when (type) {
+                    "alert" -> if (notifBlockingAlertsEnabled) FocusNotificationHelper.sendBlockAlertNotification(ctx, title, subtitle)
+                    "timer" -> if (notifTimerUpdatesEnabled) FocusNotificationHelper.sendTimerNotification(ctx, title, subtitle)
+                    "security" -> if (notifSecurityAlertsEnabled) FocusNotificationHelper.sendSecurityNotification(ctx, title, subtitle)
+                    else -> FocusNotificationHelper.sendBlockAlertNotification(ctx, title, subtitle)
+                }
+            }
+        }
+    }
+
+    fun setNotifBlockingAlerts(enabled: Boolean, context: Context) {
+        notifBlockingAlertsEnabled = enabled
+        FocusLockPreferences.getInstance(context).saveNotifBlocking(enabled)
+    }
+
+    fun setNotifTimerUpdates(enabled: Boolean, context: Context) {
+        notifTimerUpdatesEnabled = enabled
+        FocusLockPreferences.getInstance(context).saveNotifTimer(enabled)
+    }
+
+    fun setNotifSecurityAlerts(enabled: Boolean, context: Context) {
+        notifSecurityAlertsEnabled = enabled
+        FocusLockPreferences.getInstance(context).saveNotifSecurity(enabled)
+    }
+
+    fun setNotifReminders(enabled: Boolean, context: Context) {
+        notifRemindersEnabled = enabled
+        FocusLockPreferences.getInstance(context).saveNotifReminders(enabled)
+    }
+
+    fun sendTestNotification(context: Context) {
+        if (!FocusPermissionHelper.isNotificationPermissionGranted(context)) {
+            showToast("নোটিফিকেশন অনুমতি সক্রিয় নেই! অনুমতি প্রদান করুন।")
+            FocusPermissionHelper.openNotificationSettings(context)
+            return
+        }
+        FocusNotificationHelper.sendTestNotification(context)
+        addNotificationAlert(
+            title = "Focus Shield টেস্ট নোটিফিকেশন",
+            subtitle = "সিস্টেম টেস্ট নোটিফিকেশন সফলভাবে সম্পন্ন",
+            type = "security",
+            postSystemNotification = false,
+            context = context
+        )
+        showToast("টেস্ট নোটিফিকেশন সফলভাবে পাঠানো হয়েছে! নোটিফিকেশন বার চেক করুন।")
+    }
 
     var toastMessage by mutableStateOf<String?>(null)
         private set

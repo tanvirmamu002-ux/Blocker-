@@ -23,6 +23,15 @@ class FocusLockPreferences(context: Context) {
         private const val KEY_COMPLETED_SESSION_COUNT = "completed_session_count"
         private const val KEY_TOTAL_SAVED_MINUTES = "total_saved_minutes"
 
+        private const val KEY_ONE_TIME_BLOCK_PACKAGE = "one_time_block_package"
+        private const val KEY_ONE_TIME_BLOCK_NAME = "one_time_block_name"
+        private const val KEY_ONE_TIME_BLOCK_START_MS = "one_time_block_start_ms"
+        private const val KEY_ONE_TIME_BLOCK_END_MS = "one_time_block_end_ms"
+
+        private const val KEY_APP_THEME_MODE = "app_theme_mode"
+        private const val KEY_SECURITY_PIN = "security_pin"
+        private const val KEY_IS_PIN_CONFIGURED = "is_pin_configured"
+
         @Volatile
         private var INSTANCE: FocusLockPreferences? = null
 
@@ -172,4 +181,261 @@ class FocusLockPreferences(context: Context) {
         }
         return list
     }
+
+    fun saveCustomDomains(domains: List<com.example.data.BlockedDomain>) {
+        val jsonArray = org.json.JSONArray()
+        for (d in domains) {
+            val obj = org.json.JSONObject()
+            obj.put("id", d.id)
+            obj.put("domain", d.domain)
+            obj.put("blockedCount", d.blockedCount)
+            obj.put("isCustom", d.isCustom)
+            obj.put("addedTimeAgo", d.addedTimeAgo)
+            jsonArray.put(obj)
+        }
+        prefs.edit().putString("saved_custom_domains", jsonArray.toString()).apply()
+    }
+
+    fun getCustomDomains(): List<com.example.data.BlockedDomain> {
+        val jsonString = prefs.getString("saved_custom_domains", null)
+        val list = mutableListOf<com.example.data.BlockedDomain>()
+        if (jsonString.isNullOrEmpty()) return list
+        try {
+            val jsonArray = org.json.JSONArray(jsonString)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                list.add(
+                    com.example.data.BlockedDomain(
+                        id = obj.getString("id"),
+                        domain = obj.getString("domain"),
+                        blockedCount = obj.optInt("blockedCount", 0),
+                        isCustom = obj.optBoolean("isCustom", true),
+                        addedTimeAgo = obj.optString("addedTimeAgo", "যুক্ত")
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun saveCustomKeywords(keywords: List<String>) {
+        val jsonArray = org.json.JSONArray()
+        for (k in keywords) {
+            jsonArray.put(k)
+        }
+        prefs.edit().putString("saved_custom_keywords", jsonArray.toString()).apply()
+    }
+
+    fun getCustomKeywords(): List<String> {
+        val jsonString = prefs.getString("saved_custom_keywords", null)
+        val list = mutableListOf<String>()
+        if (jsonString.isNullOrEmpty()) return list
+        try {
+            val jsonArray = org.json.JSONArray(jsonString)
+            for (i in 0 until jsonArray.length()) {
+                list.add(jsonArray.getString(i))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun saveOneTimeBlock(packageName: String, appName: String, durationHours: Int = 3) {
+        val now = System.currentTimeMillis()
+        val durationMs = durationHours * 60 * 60 * 1000L
+        prefs.edit()
+            .putString(KEY_ONE_TIME_BLOCK_PACKAGE, packageName)
+            .putString(KEY_ONE_TIME_BLOCK_NAME, appName)
+            .putLong(KEY_ONE_TIME_BLOCK_START_MS, now)
+            .putLong(KEY_ONE_TIME_BLOCK_END_MS, now + durationMs)
+            .apply()
+    }
+
+    fun clearOneTimeBlock() {
+        prefs.edit()
+            .remove(KEY_ONE_TIME_BLOCK_PACKAGE)
+            .remove(KEY_ONE_TIME_BLOCK_NAME)
+            .remove(KEY_ONE_TIME_BLOCK_START_MS)
+            .remove(KEY_ONE_TIME_BLOCK_END_MS)
+            .apply()
+    }
+
+    fun getOneTimeBlockPackage(): String? {
+        val pkg = prefs.getString(KEY_ONE_TIME_BLOCK_PACKAGE, null) ?: return null
+        val endTime = prefs.getLong(KEY_ONE_TIME_BLOCK_END_MS, 0L)
+        if (endTime <= 0L || System.currentTimeMillis() >= endTime) {
+            clearOneTimeBlock()
+            return null
+        }
+        return pkg
+    }
+
+    fun getOneTimeBlockAppName(): String? {
+        val pkg = getOneTimeBlockPackage() ?: return null
+        return prefs.getString(KEY_ONE_TIME_BLOCK_NAME, pkg)
+    }
+
+    fun getOneTimeBlockEndTimeMs(): Long {
+        return prefs.getLong(KEY_ONE_TIME_BLOCK_END_MS, 0L)
+    }
+
+    fun getOneTimeBlockRemainingMs(): Long {
+        val endTime = prefs.getLong(KEY_ONE_TIME_BLOCK_END_MS, 0L)
+        if (endTime <= 0L) return 0L
+        val remaining = endTime - System.currentTimeMillis()
+        return if (remaining > 0L) remaining else 0L
+    }
+
+    fun isOneTimeBlockActive(): Boolean {
+        return getOneTimeBlockRemainingMs() > 0L && !prefs.getString(KEY_ONE_TIME_BLOCK_PACKAGE, null).isNullOrEmpty()
+    }
+
+    fun saveActivities(activities: List<com.example.data.RecentActivity>) {
+        val jsonArray = org.json.JSONArray()
+        for (a in activities) {
+            val obj = org.json.JSONObject()
+            obj.put("id", a.id)
+            obj.put("titleBangla", a.titleBangla)
+            obj.put("titleEnglish", a.titleEnglish)
+            obj.put("timeAgoBangla", a.timeAgoBangla)
+            obj.put("timeAgoEnglish", a.timeAgoEnglish)
+            obj.put("isSuccess", a.isSuccess)
+            obj.put("iconType", a.iconType)
+            obj.put("isSensitive", a.isSensitive)
+            jsonArray.put(obj)
+        }
+        prefs.edit().putString("saved_recent_activities", jsonArray.toString()).apply()
+    }
+
+    fun getActivities(): List<com.example.data.RecentActivity> {
+        val jsonString = prefs.getString("saved_recent_activities", null)
+        val list = mutableListOf<com.example.data.RecentActivity>()
+        if (jsonString.isNullOrEmpty()) return list
+        try {
+            val jsonArray = org.json.JSONArray(jsonString)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                list.add(
+                    com.example.data.RecentActivity(
+                        id = obj.getString("id"),
+                        titleBangla = obj.getString("titleBangla"),
+                        titleEnglish = obj.getString("titleEnglish"),
+                        timeAgoBangla = obj.getString("timeAgoBangla"),
+                        timeAgoEnglish = obj.getString("timeAgoEnglish"),
+                        isSuccess = obj.optBoolean("isSuccess", false),
+                        iconType = obj.optString("iconType", "blocked"),
+                        isSensitive = obj.optBoolean("isSensitive", false)
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun saveProtectedActivities(activities: List<com.example.data.RecentActivity>) {
+        val jsonArray = org.json.JSONArray()
+        for (a in activities) {
+            val obj = org.json.JSONObject()
+            obj.put("id", a.id)
+            obj.put("titleBangla", a.titleBangla)
+            obj.put("titleEnglish", a.titleEnglish)
+            obj.put("timeAgoBangla", a.timeAgoBangla)
+            obj.put("timeAgoEnglish", a.timeAgoEnglish)
+            obj.put("isSuccess", a.isSuccess)
+            obj.put("iconType", a.iconType)
+            obj.put("isSensitive", a.isSensitive)
+            jsonArray.put(obj)
+        }
+        prefs.edit().putString("saved_protected_activities", jsonArray.toString()).apply()
+    }
+
+    fun getProtectedActivities(): List<com.example.data.RecentActivity> {
+        val jsonString = prefs.getString("saved_protected_activities", null)
+        val list = mutableListOf<com.example.data.RecentActivity>()
+        if (jsonString.isNullOrEmpty()) return list
+        try {
+            val jsonArray = org.json.JSONArray(jsonString)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                list.add(
+                    com.example.data.RecentActivity(
+                        id = obj.getString("id"),
+                        titleBangla = obj.getString("titleBangla"),
+                        titleEnglish = obj.getString("titleEnglish"),
+                        timeAgoBangla = obj.getString("timeAgoBangla"),
+                        timeAgoEnglish = obj.getString("timeAgoEnglish"),
+                        isSuccess = obj.optBoolean("isSuccess", false),
+                        iconType = obj.optString("iconType", "blocked"),
+                        isSensitive = obj.optBoolean("isSensitive", true)
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun saveAppThemeMode(mode: com.example.data.AppThemeMode) {
+        prefs.edit().putString(KEY_APP_THEME_MODE, mode.name).apply()
+    }
+
+    fun getAppThemeMode(): com.example.data.AppThemeMode {
+        val name = prefs.getString(KEY_APP_THEME_MODE, com.example.data.AppThemeMode.LIGHT.name)
+        return try {
+            com.example.data.AppThemeMode.valueOf(name ?: com.example.data.AppThemeMode.LIGHT.name)
+        } catch (e: Exception) {
+            com.example.data.AppThemeMode.LIGHT
+        }
+    }
+
+    fun saveSecurityPin(pin: String) {
+        prefs.edit()
+            .putString(KEY_SECURITY_PIN, pin)
+            .putBoolean(KEY_IS_PIN_CONFIGURED, true)
+            .apply()
+    }
+
+    fun deleteSecurityPin() {
+        prefs.edit()
+            .remove(KEY_SECURITY_PIN)
+            .putBoolean(KEY_IS_PIN_CONFIGURED, false)
+            .apply()
+    }
+
+    fun getSecurityPin(): String {
+        return prefs.getString(KEY_SECURITY_PIN, "1234") ?: "1234"
+    }
+
+    fun isPinConfigured(): Boolean {
+        return prefs.getBoolean(KEY_IS_PIN_CONFIGURED, true)
+    }
+
+    // Notification Preferences
+    fun getNotifBlocking(): Boolean = prefs.getBoolean("notif_blocking", true)
+    fun saveNotifBlocking(value: Boolean) = prefs.edit().putBoolean("notif_blocking", value).apply()
+
+    fun getNotifTimer(): Boolean = prefs.getBoolean("notif_timer", true)
+    fun saveNotifTimer(value: Boolean) = prefs.edit().putBoolean("notif_timer", value).apply()
+
+    fun getNotifSecurity(): Boolean = prefs.getBoolean("notif_security", true)
+    fun saveNotifSecurity(value: Boolean) = prefs.edit().putBoolean("notif_security", value).apply()
+
+    fun getNotifReminders(): Boolean = prefs.getBoolean("notif_reminders", true)
+    fun saveNotifReminders(value: Boolean) = prefs.edit().putBoolean("notif_reminders", value).apply()
+
+    // Onboarding & User Profile Info
+    fun isOnboardingCompleted(): Boolean = prefs.getBoolean("onboarding_completed", false)
+    fun setOnboardingCompleted(completed: Boolean) = prefs.edit().putBoolean("onboarding_completed", completed).apply()
+
+    fun getUserName(): String? = prefs.getString("user_name", null)
+    fun saveUserName(name: String) = prefs.edit().putString("user_name", name).apply()
+
+    fun getUserReligion(): String? = prefs.getString("user_religion", null)
+    fun saveUserReligion(religion: String) = prefs.edit().putString("user_religion", religion).apply()
 }

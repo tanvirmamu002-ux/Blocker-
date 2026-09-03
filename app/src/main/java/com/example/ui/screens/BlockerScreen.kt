@@ -1,7 +1,12 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.content.pm.PackageManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +22,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,13 +32,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
@@ -56,6 +66,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -67,6 +78,8 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,16 +88,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.AppScreenTimeLimit
 import com.example.data.BlockedDomain
 import com.example.data.CategoryFilter
 import com.example.state.FocusViewModel
+import com.example.ui.components.RealAppIcon
 import com.example.ui.theme.AppTheme
+import com.example.ui.theme.HindSiliguri
+import kotlin.math.roundToInt
 
 @Composable
 fun BlockerScreen(
@@ -92,6 +114,12 @@ fun BlockerScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = AppTheme.colors
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.loadPerAppLimits(context)
+        viewModel.refreshRealUsageAndAnalytics(context)
+    }
 
     Column(
         modifier = modifier
@@ -134,97 +162,11 @@ fun BlockerScreen(
 
         // Serial Cards List (Dual-state glowing items)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Per-App Screen Time Limit Action Card
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(colors.surface)
-                    .border(
-                        1.dp,
-                        Brush.horizontalGradient(listOf(Color(0xFFFFB703), Color(0xFFFF8800))),
-                        RoundedCornerShape(18.dp)
-                    )
-                    .clickable { viewModel.isScreenTimeLimitDialogVisible = true }
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .testTag("card_blocker_screen_time_limit")
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFFF8800).copy(alpha = 0.15f))
-                                .border(1.dp, Color(0xFFFF8800).copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Timer,
-                                contentDescription = "Screen Time",
-                                tint = Color(0xFFFF8800),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "অ্যাপ স্ক্রিন টাইম লিমিট",
-                                    color = colors.textPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0xFFFF8800).copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "Circular Slider",
-                                        color = Color(0xFFFF8800),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "প্রতিটি অ্যাপের জন্য ২৪ ঘণ্টার সীমা নির্ধারণ ও ম্যানেজ করুন",
-                                color = colors.textSecondary,
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFF8800).copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = "Configure",
-                            tint = Color(0xFFFF8800),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
+            // Refactored Minimal App Screen Time Limit Card with Modern Chevron Navigation Icon
+            AppScreenTimeLimitExpandableCard(
+                viewModel = viewModel,
+                context = context
+            )
 
             // Standard Category Filters with Switches
             viewModel.categoryFilters.forEach { filter ->
@@ -243,6 +185,474 @@ fun BlockerScreen(
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
+/**
+ * Minimal, Professional App Screen Time Limit Card.
+ * Clean layout: No internal extra buttons/sliders.
+ * Modern Chevron/Navigation Icon at bottom-right.
+ * Smooth expand/slide animation revealing:
+ * 1. Overview stats (Limited Apps, Total Usage Today, Locked Apps)
+ * 2. Category filtering chips (সবগুলো, সীমা সক্রিয়, সোশ্যাল মিডিয়া, ভিডিও ও বিনোদন, শর্ট ভিডিও)
+ * 3. A-B-C alphabetically sorted list of real installed device apps with authentic icons & package names.
+ */
+@Composable
+private fun AppScreenTimeLimitExpandableCard(
+    viewModel: FocusViewModel,
+    context: Context
+) {
+    val colors = AppTheme.colors
+    var isExpanded by remember { mutableStateOf(false) }
+    var selectedCategoryFilter by remember { mutableStateOf("সবগুলো") }
+
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 90f else 0f,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label = "chevron_rotation"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(colors.surface)
+            .border(
+                1.dp,
+                if (isExpanded) Brush.horizontalGradient(listOf(Color(0xFFFFB703), Color(0xFFFF8800)))
+                else Brush.horizontalGradient(listOf(colors.borderSubtle, colors.borderSubtle)),
+                RoundedCornerShape(18.dp)
+            )
+            .animateContentSize(
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+            )
+            .testTag("card_blocker_screen_time_limit")
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Main Minimal Card Content (Clickable)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Left Icon + Clean Title & Subtitle
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFF8800).copy(alpha = 0.14f))
+                            .border(1.dp, Color(0xFFFF8800).copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = "Screen Time",
+                            tint = Color(0xFFFF8800),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Text(
+                            text = "অ্যাপ স্ক্রিন টাইম লিমিট",
+                            color = colors.textPrimary,
+                            fontSize = 15.sp,
+                            fontFamily = HindSiliguri,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "প্রতিটি অ্যাপের জন্য দৈনিক সীমা নির্ধারণ ও নিয়ন্ত্রণ করুন",
+                            color = colors.textSecondary,
+                            fontSize = 11.5.sp,
+                            fontFamily = HindSiliguri,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Modern Navigation / Chevron Icon at the right
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isExpanded) Color(0xFFFF8800).copy(alpha = 0.16f)
+                            else colors.surfaceElevated
+                        )
+                        .border(
+                            1.dp,
+                            if (isExpanded) Color(0xFFFF8800).copy(alpha = 0.4f)
+                            else colors.borderSubtle,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = "Expand Screen Time Limit",
+                        tint = if (isExpanded) Color(0xFFFF8800) else colors.textMuted,
+                        modifier = Modifier
+                            .size(13.dp)
+                            .rotate(chevronRotation)
+                    )
+                }
+            }
+
+            // Expanded Options Panel with Smooth Animation
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(200))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                ) {
+                    HorizontalDivider(
+                        color = colors.borderSubtle,
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(bottom = 14.dp)
+                    )
+
+                    // 1. Overview Summary Stats Row
+                    val activeLimitsCount = viewModel.appScreenTimeLimits.count { it.isEnabled && it.limitMinutes > 0 }
+                    val totalUsedMins = viewModel.appScreenTimeLimits.sumOf { it.usedMinutesToday }
+                    val lockedCount = viewModel.appScreenTimeLimits.count { it.isEnabled && it.limitMinutes > 0 && it.usedMinutesToday >= it.limitMinutes }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surfaceElevated)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Limited Apps Stat
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Text(
+                                    text = "সীমিত অ্যাপস",
+                                    color = colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontFamily = HindSiliguri
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "$activeLimitsCount টি",
+                                    color = colors.textPrimary,
+                                    fontSize = 15.sp,
+                                    fontFamily = HindSiliguri,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(28.dp)
+                                    .background(colors.borderSubtle)
+                            )
+
+                            // Total Usage Today Stat (Real Data)
+                            Column(
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .padding(horizontal = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "আজকের মোট ব্যবহার",
+                                    color = colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontFamily = HindSiliguri
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${totalUsedMins / 60}ঘ. ${totalUsedMins % 60}মি.",
+                                    color = Color(0xFFFF8800),
+                                    fontSize = 15.sp,
+                                    fontFamily = HindSiliguri,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(28.dp)
+                                    .background(colors.borderSubtle)
+                            )
+
+                            // Locked Apps Stat (Non-button, factual count)
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Text(
+                                    text = "লকড অ্যাপস",
+                                    color = colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontFamily = HindSiliguri
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (lockedCount > 0) "$lockedCount টি লকড" else "০ টি",
+                                    color = if (lockedCount > 0) colors.alert else colors.secondary,
+                                    fontSize = 14.sp,
+                                    fontFamily = HindSiliguri,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // 2. Category Filter Row
+                    val filterCategories = listOf("সবগুলো", "সীমা সক্রিয়", "সোশ্যাল মিডিয়া", "ভিডিও ও বিনোদন", "শর্ট ভিডিও")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        filterCategories.forEach { category ->
+                            val isSelected = selectedCategoryFilter == category
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isSelected) Color(0xFFFF8800).copy(alpha = 0.16f)
+                                        else colors.surfaceElevated
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) Color(0xFFFF8800) else colors.borderSubtle,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { selectedCategoryFilter = category }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = category,
+                                    color = if (isSelected) Color(0xFFFF8800) else colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontFamily = HindSiliguri,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // 3. Real Installed App List (Sorted Alphabetically A-B-C)
+                    val sortedAndFilteredApps = remember(viewModel.appScreenTimeLimits.toList(), selectedCategoryFilter) {
+                        viewModel.appScreenTimeLimits.filter { app ->
+                            when (selectedCategoryFilter) {
+                                "সবগুলো" -> true
+                                "সীমা সক্রিয়" -> app.isEnabled && app.limitMinutes > 0
+                                "সোশ্যাল মিডিয়া" -> app.category.contains("সোশ্যাল", ignoreCase = true) ||
+                                        app.category.contains("Social", ignoreCase = true) ||
+                                        app.packageName.contains("facebook", ignoreCase = true) ||
+                                        app.packageName.contains("instagram", ignoreCase = true) ||
+                                        app.packageName.contains("twitter", ignoreCase = true)
+                                "ভিডিও ও বিনোদন" -> app.category.contains("ভিডিও", ignoreCase = true) ||
+                                        app.category.contains("বিনোদন", ignoreCase = true) ||
+                                        app.category.contains("Video", ignoreCase = true) ||
+                                        app.packageName.contains("youtube", ignoreCase = true) ||
+                                        app.packageName.contains("netflix", ignoreCase = true)
+                                "শর্ট ভিডিও" -> app.category.contains("শর্ট", ignoreCase = true) ||
+                                        app.packageName.contains("tiktok", ignoreCase = true) ||
+                                        app.packageName.contains("musically", ignoreCase = true) ||
+                                        app.packageName.contains("youtube", ignoreCase = true) ||
+                                        app.packageName.contains("instagram", ignoreCase = true)
+                                else -> true
+                            }
+                        }.sortedBy { it.appNameBangla.lowercase() }
+                    }
+
+                    if (sortedAndFilteredApps.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.Apps,
+                                    contentDescription = null,
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "এই ক্যাটাগরিতে কোনো অ্যাপ নেই",
+                                    color = colors.textSecondary,
+                                    fontSize = 12.sp,
+                                    fontFamily = HindSiliguri
+                                )
+                            }
+                        }
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            sortedAndFilteredApps.forEach { app ->
+                                RealAppScreenTimeRowItem(
+                                    app = app,
+                                    context = context,
+                                    onClick = { viewModel.openAppSliderDialog(app) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Individual App Item displaying authentic App Icon, Name, Package Name,
+ * real foreground usage time, and active limit state.
+ */
+@Composable
+private fun RealAppScreenTimeRowItem(
+    app: AppScreenTimeLimit,
+    context: Context,
+    onClick: () -> Unit
+) {
+    val colors = AppTheme.colors
+    val hasLimit = app.isEnabled && app.limitMinutes > 0
+    val isExceeded = hasLimit && app.usedMinutesToday >= app.limitMinutes
+    val progress = if (hasLimit) (app.usedMinutesToday.toFloat() / app.limitMinutes.toFloat()).coerceIn(0f, 1f) else 0f
+
+    // Fetch real drawable icon from PackageManager
+    val appIconDrawable = remember(app.packageName) {
+        try {
+            context.packageManager.getApplicationIcon(app.packageName)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.surfaceElevated)
+            .border(
+                1.dp,
+                if (isExceeded) colors.alert.copy(alpha = 0.45f)
+                else if (hasLimit) Color(0xFFFF8800).copy(alpha = 0.25f)
+                else colors.borderSubtle,
+                RoundedCornerShape(12.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left: Real App Icon + Names
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                RealAppIcon(
+                    drawable = appIconDrawable,
+                    sizeDp = 40
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = app.appNameBangla,
+                        color = colors.textPrimary,
+                        fontSize = 13.5.sp,
+                        fontFamily = HindSiliguri,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = app.packageName,
+                        color = colors.textMuted,
+                        fontSize = 10.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // Right: Real Usage Today & Limit Status
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "${app.usedMinutesToday} মিনিট ব্যবহৃত",
+                    color = colors.textSecondary,
+                    fontSize = 11.5.sp,
+                    fontFamily = HindSiliguri,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                if (hasLimit) {
+                    if (isExceeded) {
+                        Text(
+                            text = "সীমা শেষ (${app.limitMinutes} মি.) 🔒",
+                            color = colors.alert,
+                            fontSize = 10.5.sp,
+                            fontFamily = HindSiliguri,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "সীমা: ${app.limitMinutes} মি. (${app.limitMinutes - app.usedMinutesToday} মি. বাকি)",
+                            color = Color(0xFFFF8800),
+                            fontSize = 10.5.sp,
+                            fontFamily = HindSiliguri,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "কোনো সীমা নেই",
+                        color = colors.textMuted,
+                        fontSize = 10.5.sp,
+                        fontFamily = HindSiliguri
+                    )
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun CategoryFilterCard(
@@ -424,9 +834,7 @@ private fun ExpandableCustomBlocklistCard(
     var isExpanded by remember { mutableStateOf(false) }
     var activeTab by remember { mutableIntStateOf(0) } // 0: Website/Domain, 1: Keyword
     var textInput by remember { mutableStateOf("") }
-
-    val presetWebsites = listOf("tiktok.com", "instagram.com", "reddit.com", "x.com", "twitch.tv")
-    val presetKeywords = listOf("casino", "betting", "adult", "porn", "shorts", "dating")
+    var validationError by remember { mutableStateOf<String?>(null) }
 
     val totalBlockedCount = viewModel.customDomains.size + viewModel.customKeywords.size
 
@@ -622,6 +1030,7 @@ private fun ExpandableCustomBlocklistCard(
                             onClick = {
                                 activeTab = 0
                                 textInput = ""
+                                validationError = null
                             },
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -631,7 +1040,8 @@ private fun ExpandableCustomBlocklistCard(
                                         text = "ওয়েবসাইট (${viewModel.customDomains.size})",
                                         color = if (activeTab == 0) colors.primaryBright else colors.textSecondary,
                                         fontWeight = if (activeTab == 0) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 12.sp
+                                        fontSize = 12.sp,
+                                        fontFamily = HindSiliguri
                                     )
                                 }
                             }
@@ -641,6 +1051,7 @@ private fun ExpandableCustomBlocklistCard(
                             onClick = {
                                 activeTab = 1
                                 textInput = ""
+                                validationError = null
                             },
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -650,7 +1061,8 @@ private fun ExpandableCustomBlocklistCard(
                                         text = "কিওয়ার্ড (${viewModel.customKeywords.size})",
                                         color = if (activeTab == 1) colors.primaryBright else colors.textSecondary,
                                         fontWeight = if (activeTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 12.sp
+                                        fontSize = 12.sp,
+                                        fontFamily = HindSiliguri
                                     )
                                 }
                             }
@@ -659,116 +1071,169 @@ private fun ExpandableCustomBlocklistCard(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Input Box + Add & Save Buttons
+                    // Input Box + Save Button (Aligned on the same line, equal height, wide left input, compact right button)
                     Text(
-                        text = if (activeTab == 0) "নতুন ওয়েবসাইট বা লিঙ্ক যোগ করুন" else "নতুন সার্চ কিওয়ার্ড যোগ করুন",
+                        text = if (activeTab == 0) "ওয়েবসাইট লিংক বা ডোমেইন লিখুন" else "সার্চ কিওয়ার্ড লিখুন",
                         color = colors.textSecondary,
                         fontSize = 12.sp,
+                        fontFamily = HindSiliguri,
                         fontWeight = FontWeight.Medium
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedTextField(
-                            value = textInput,
-                            onValueChange = { textInput = it },
-                            placeholder = {
-                                Text(
-                                    text = if (activeTab == 0) "যেমন: facebook.com, youtube.com" else "যেমন: casino, betting, 18+",
-                                    color = colors.textMuted,
-                                    fontSize = 12.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (activeTab == 0) Icons.Default.Link else Icons.Default.Tag,
-                                    contentDescription = null,
-                                    tint = colors.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = colors.primary,
-                                unfocusedBorderColor = colors.border,
-                                focusedTextColor = colors.textPrimary,
-                                unfocusedTextColor = colors.textPrimary,
-                                focusedContainerColor = colors.surfaceElevated,
-                                unfocusedContainerColor = colors.surfaceElevated
-                            ),
-                            shape = RoundedCornerShape(12.dp),
+                        // Left Input Box: Wide, modern, matching button height exactly
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("input_blocklist_text")
-                        )
-
-                        Button(
-                            onClick = {
-                                if (textInput.isNotBlank()) {
-                                    if (activeTab == 0) {
-                                        viewModel.addCustomDomain(textInput)
-                                    } else {
-                                        viewModel.addCustomKeyword(textInput)
-                                    }
-                                    textInput = ""
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.primary,
-                                contentColor = if (colors.isDark) Color(0xFF0D1117) else Color.White
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .height(50.dp)
-                                .testTag("btn_save_blocklist_item")
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.surfaceElevated)
+                                .border(
+                                    1.dp,
+                                    if (validationError != null) colors.alert.copy(alpha = 0.85f) else colors.border,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.CenterStart
                         ) {
-                            Icon(imageVector = Icons.Default.Save, contentDescription = "Save", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "সংরক্ষণ", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (activeTab == 0) Icons.Default.Public else Icons.Default.Tag,
+                                    contentDescription = null,
+                                    tint = if (validationError != null) colors.alert else colors.primary,
+                                    modifier = Modifier.size(17.dp)
+                                )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
 
-                    // Quick Add Presets
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(text = "দ্রুত যোগ:", color = colors.textMuted, fontSize = 10.sp)
-                        val presets = if (activeTab == 0) presetWebsites else presetKeywords
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            presets.take(4).forEach { item ->
                                 Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(colors.surfaceElevated)
-                                        .border(1.dp, colors.border, RoundedCornerShape(6.dp))
-                                        .clickable {
-                                            if (activeTab == 0) viewModel.addCustomDomain(item)
-                                            else viewModel.addCustomKeyword(item)
-                                        }
-                                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
                                 ) {
-                                    Text(
-                                        text = "+ $item",
-                                        color = colors.primaryBright,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium
+                                    if (textInput.isEmpty()) {
+                                        Text(
+                                            text = if (activeTab == 0) "examplewebsite.com" else "যেমন: keyword",
+                                            color = colors.textMuted.copy(alpha = 0.55f),
+                                            fontSize = 12.5.sp,
+                                            fontFamily = HindSiliguri
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = textInput,
+                                        onValueChange = { input ->
+                                            textInput = input
+                                            if (validationError != null) validationError = null
+                                        },
+                                        singleLine = true,
+                                        textStyle = TextStyle(
+                                            color = colors.textPrimary,
+                                            fontSize = 13.sp,
+                                            fontFamily = HindSiliguri,
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        cursorBrush = SolidColor(colors.primary),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("input_blocklist_text")
                                     )
+                                }
+
+                                if (textInput.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            textInput = ""
+                                            validationError = null
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = colors.textMuted,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
+
+                        // Right Save Button: Compact, equal height (46.dp), perfectly aligned
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.primary)
+                                .clickable {
+                                    if (activeTab == 0) {
+                                        val isValid = viewModel.cleanAndValidateDomain(textInput) != null
+                                        if (!isValid) {
+                                            validationError = "দয়া করে সঠিক ওয়েবসাইট লিংক বা ডোমেইন লিখুন (যেমন: examplewebsite.com)"
+                                            viewModel.showToast("দয়া করে সঠিক ওয়েবসাইট লিংক বা ডোমেইন লিখুন (যেমন: examplewebsite.com)")
+                                        } else {
+                                            val saved = viewModel.addCustomDomain(textInput)
+                                            if (saved) {
+                                                textInput = ""
+                                                validationError = null
+                                            }
+                                        }
+                                    } else {
+                                        if (textInput.isBlank()) {
+                                            validationError = "দয়া করে একটি কিওয়ার্ড লিখুন"
+                                            viewModel.showToast("দয়া করে একটি কিওয়ার্ড লিখুন")
+                                        } else {
+                                            val saved = viewModel.addCustomKeyword(textInput)
+                                            if (saved) {
+                                                textInput = ""
+                                                validationError = null
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(horizontal = 14.dp)
+                                .testTag("btn_save_blocklist_item"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Save",
+                                    tint = if (colors.isDark) Color(0xFF0D1117) else Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "সংরক্ষণ করুন",
+                                    color = if (colors.isDark) Color(0xFF0D1117) else Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.5.sp,
+                                    fontFamily = HindSiliguri
+                                )
+                            }
+                        }
+                    }
+
+                    if (validationError != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = validationError!!,
+                            color = colors.alert,
+                            fontSize = 11.sp,
+                            fontFamily = HindSiliguri
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -782,9 +1247,10 @@ private fun ExpandableCustomBlocklistCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "ব্লক করা ওয়েবসাইটসমূহ (${viewModel.customDomains.size})",
+                                text = "ব্লক করা ওয়েবসাইট সমূহ (${viewModel.customDomains.size})",
                                 color = colors.textPrimary,
                                 fontSize = 13.sp,
+                                fontFamily = HindSiliguri,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -795,16 +1261,35 @@ private fun ExpandableCustomBlocklistCard(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(colors.surfaceElevated)
-                                    .padding(vertical = 16.dp),
+                                    .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 18.dp, horizontal = 16.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "কোনো ওয়েবসাইট যুক্ত নেই",
-                                    color = colors.textMuted,
-                                    fontSize = 12.sp
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.Public,
+                                        contentDescription = null,
+                                        tint = colors.textMuted.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "কোনো ওয়েবসাইট এখনও ব্লক করা হয়নি",
+                                        color = colors.textSecondary,
+                                        fontSize = 12.sp,
+                                        fontFamily = HindSiliguri,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "উপরের বক্সে লিংক লিখে “সংরক্ষণ করুন” চাপুন",
+                                        color = colors.textMuted,
+                                        fontSize = 11.sp,
+                                        fontFamily = HindSiliguri
+                                    )
+                                }
                             }
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -824,9 +1309,10 @@ private fun ExpandableCustomBlocklistCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "ব্লক করা কিওয়ার্ডসমূহ (${viewModel.customKeywords.size})",
+                                text = "ব্লক করা কিওয়ার্ড সমূহ (${viewModel.customKeywords.size})",
                                 color = colors.textPrimary,
                                 fontSize = 13.sp,
+                                fontFamily = HindSiliguri,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -837,16 +1323,35 @@ private fun ExpandableCustomBlocklistCard(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(colors.surfaceElevated)
-                                    .padding(vertical = 16.dp),
+                                    .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 18.dp, horizontal = 16.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "কোনো কিওয়ার্ড যুক্ত নেই",
-                                    color = colors.textMuted,
-                                    fontSize = 12.sp
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.Tag,
+                                        contentDescription = null,
+                                        tint = colors.textMuted.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "কোনো কিওয়ার্ড এখনও ব্লক করা হয়নি",
+                                        color = colors.textSecondary,
+                                        fontSize = 12.sp,
+                                        fontFamily = HindSiliguri,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "উপরের বক্সে কিওয়ার্ড লিখে “সংরক্ষণ করুন” চাপুন",
+                                        color = colors.textMuted,
+                                        fontSize = 11.sp,
+                                        fontFamily = HindSiliguri
+                                    )
+                                }
                             }
                         } else {
                             FlowRow(
@@ -881,10 +1386,10 @@ private fun CustomDomainRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(colors.surfaceElevated)
-            .border(1.dp, colors.borderLight, RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -892,26 +1397,36 @@ private fun CustomDomainRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f)
         ) {
-            Icon(
-                imageVector = Icons.Default.Public,
-                contentDescription = null,
-                tint = colors.primary,
-                modifier = Modifier.size(16.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Public,
+                    contentDescription = null,
+                    tint = colors.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column {
                 Text(
                     text = item.domain,
                     color = colors.textPrimary,
-                    fontSize = 13.sp,
+                    fontSize = 13.5.sp,
+                    fontFamily = HindSiliguri,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "${item.blockedCount} বার প্রতিহত • ${item.addedTimeAgo}",
+                    text = if (item.blockedCount > 0) "${item.blockedCount} বার প্রতিহত • ${item.addedTimeAgo}" else item.addedTimeAgo,
                     color = colors.textMuted,
-                    fontSize = 10.sp
+                    fontSize = 11.sp,
+                    fontFamily = HindSiliguri
                 )
             }
         }
@@ -920,7 +1435,7 @@ private fun CustomDomainRow(
         IconButton(
             onClick = onDelete,
             modifier = Modifier
-                .size(30.dp)
+                .size(34.dp)
                 .testTag("btn_delete_domain_${item.id}")
         ) {
             Icon(
@@ -942,10 +1457,10 @@ private fun RemovableKeywordChip(
 
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(colors.surfaceElevated)
-            .border(1.dp, colors.alert.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
-            .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+            .border(1.dp, colors.alert.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+            .padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically
@@ -954,27 +1469,28 @@ private fun RemovableKeywordChip(
                 imageVector = Icons.Default.Tag,
                 contentDescription = null,
                 tint = colors.alert,
-                modifier = Modifier.size(12.dp)
+                modifier = Modifier.size(13.dp)
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = keyword,
                 color = colors.textPrimary,
-                fontSize = 12.sp,
+                fontSize = 12.5.sp,
+                fontFamily = HindSiliguri,
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.width(4.dp))
             IconButton(
                 onClick = onDelete,
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(28.dp)
                     .testTag("btn_delete_kw_$keyword")
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Delete Keyword",
                     tint = colors.alert,
-                    modifier = Modifier.size(13.dp)
+                    modifier = Modifier.size(14.dp)
                 )
             }
         }

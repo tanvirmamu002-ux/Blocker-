@@ -45,6 +45,7 @@ fun PinLockBottomSheet(
     modifier: Modifier = Modifier
 ) {
     val colors = AppTheme.colors
+    val strings = com.example.util.LocalAppStrings.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     if (viewModel.isPinBottomSheetVisible) {
@@ -106,21 +107,27 @@ fun PinLockBottomSheet(
 
                 // Title & Subtitle based on Action
                 val title = when (viewModel.currentPinAction) {
-                    FocusViewModel.PinAction.CREATE_PIN -> "নতুন ৪-ডিজিট পিন তৈরি করুন"
-                    FocusViewModel.PinAction.RESET_PIN -> "পিন রিসেট করুন"
-                    FocusViewModel.PinAction.CHANGE_PIN -> "নতুন ৪-ডিজিট পিন দিন"
+                    FocusViewModel.PinAction.SETTINGS_VERIFY_CURRENT -> strings.pinVerifyCurrentTitle
+                    FocusViewModel.PinAction.SETTINGS_ENTER_NEW, FocusViewModel.PinAction.CREATE_PIN -> strings.pinEnterNewTitle
+                    FocusViewModel.PinAction.SETTINGS_CONFIRM_NEW -> strings.pinConfirmNewTitle
+                    FocusViewModel.PinAction.RESET_PIN -> strings.pinReset
+                    FocusViewModel.PinAction.CHANGE_PIN -> strings.pinChange
                     FocusViewModel.PinAction.DISABLE_STRICT_MODE -> "স্ট্রিক্ট মোড নিষ্ক্রিয় করতে পিন দিন"
                     FocusViewModel.PinAction.UNLOCK_STRICT_TIMER -> "টাইমার আনলক করতে পিন দিন"
                     FocusViewModel.PinAction.EMERGENCY_UNLOCK -> "ইমার্জেন্সি আনলক পিন দিন"
+                    FocusViewModel.PinAction.VIEW_PROTECTED_ACTIVITY -> "সুরক্ষিত অ্যাক্টিভিটি আনলক করুন"
                     else -> "সিকিউরিটি পিন ভেরিফিকেশন"
                 }
 
                 val subtitle = when (viewModel.currentPinAction) {
-                    FocusViewModel.PinAction.CREATE_PIN -> "লক সুরক্ষার জন্য ৪ সংখ্যার পিন নির্ধারণ করুন"
+                    FocusViewModel.PinAction.SETTINGS_VERIFY_CURRENT -> strings.pinVerifyCurrentSubtitle
+                    FocusViewModel.PinAction.SETTINGS_ENTER_NEW, FocusViewModel.PinAction.CREATE_PIN -> strings.pinEnterNewSubtitle
+                    FocusViewModel.PinAction.SETTINGS_CONFIRM_NEW -> strings.pinConfirmNewSubtitle
                     FocusViewModel.PinAction.RESET_PIN -> "নতুন ৪-ডিজিট পিন টাইপ করে রিসেট নিশ্চিত করুন"
-                    FocusViewModel.PinAction.CHANGE_PIN -> "নতুন পিন সেট করতে ৪টি সংখ্যা টাইপ করুন (ডিফল্ট: 1234)"
+                    FocusViewModel.PinAction.CHANGE_PIN -> strings.pinEnterNewSubtitle
                     FocusViewModel.PinAction.DISABLE_STRICT_MODE -> "স্ট্রিক্ট সুরক্ষা বন্ধের জন্য আপনার পিন দিন"
-                    else -> "আপনার গোপন ৪-ডিজিট পিন প্রবেশ করান (ডিফল্ট: 1234)"
+                    FocusViewModel.PinAction.VIEW_PROTECTED_ACTIVITY -> "সংবেদনশীল অ্যাক্টিভিটি হিস্ট্রি দেখতে ৪-ডিজিট পিন দিন"
+                    else -> "আপনার গোপন ৪-ডিজিট পিন প্রবেশ করান"
                 }
 
                 Text(

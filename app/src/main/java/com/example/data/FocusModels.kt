@@ -78,7 +78,8 @@ data class RecentActivity(
     val timeAgoBangla: String,
     val timeAgoEnglish: String,
     val isSuccess: Boolean = false,
-    val iconType: String = "blocked" // "blocked", "session", "shield"
+    val iconType: String = "blocked", // "blocked", "session", "shield"
+    val isSensitive: Boolean = false
 )
 
 data class AccountabilityPartner(
@@ -103,14 +104,15 @@ data class SecurityPermission(
 
 data class UserAccount(
     val isLoggedIn: Boolean = true,
-    val name: String = "John Doe (Boss)",
+    val name: String = "John Doe",
     val email: String = "focus.guardian@example.com",
     val phone: String = "+৮৮০ ১৭১২-৩৪৫৬৭৮",
     val bio: String = "ফোকাস ও আত্মউন্নয়নের পথে নিয়োজিত",
     val isPremium: Boolean = true,
     val avatarInitials: String = "JD",
     val avatarUri: String? = null,
-    val memberSince: String = "জানুয়ারি ২০২৬"
+    val memberSince: String = "জানুয়ারি ২০২৬",
+    val religion: String = "ইসলাম"
 )
 
 data class FocusBadge(

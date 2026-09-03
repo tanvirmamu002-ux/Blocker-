@@ -52,6 +52,8 @@ import com.example.data.FocusLockState
 import com.example.data.NavigationTab
 import com.example.data.RecentActivity
 import com.example.state.FocusViewModel
+import com.example.ui.components.OneTimeBlockAppSelectionDialog
+import com.example.ui.components.OneTimeBlockConfirmationDialog
 import com.example.ui.components.RadarShieldCard
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.EditorialTypography
@@ -86,7 +88,7 @@ fun HomeScreen(
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = strings.homeGreeting,
+                        text = strings.getDynamicGreeting(viewModel.userAccount.name),
                         color = colors.textPrimary,
                         fontSize = 20.sp,
                         fontFamily = HindSiliguri,
@@ -204,18 +206,27 @@ fun HomeScreen(
             )
 
             // 2. On-Time Block Card
+            val oneTimeSubtitle = if (viewModel.isQuickBlockNowActive && viewModel.oneTimeBlockedAppName != null) {
+                val remSeconds = viewModel.remainingOneTimeBlockSeconds
+                val hours = remSeconds / 3600
+                val mins = (remSeconds % 3600) / 60
+                val timeStr = if (hours > 0) "${hours}ঘ. ${mins}মি." else "${mins}মি."
+                "${viewModel.oneTimeBlockedAppName} ($timeStr)"
+            } else if (viewModel.isQuickBlockNowActive) {
+                strings.quickActionOneTimeActive
+            } else {
+                strings.quickActionOneTimeDesc
+            }
+
             QuickActionCard(
                 title = strings.quickActionOneTime,
-                subtitle = if (viewModel.isQuickBlockNowActive) strings.quickActionOneTimeActive else strings.quickActionOneTimeDesc,
+                subtitle = oneTimeSubtitle,
                 icon = Icons.Default.Block,
                 iconTint = colors.alert,
                 iconBg = colors.alert.copy(alpha = 0.14f),
                 isActive = viewModel.isQuickBlockNowActive,
                 onClick = {
-                    viewModel.toggleQuickBlockNow()
-                    viewModel.showToast(
-                        if (viewModel.isQuickBlockNowActive) strings.toastInstantBlockApplied else strings.toastBlockRemoved
-                    )
+                    viewModel.triggerOneTimeBlockQuickAction(context)
                 },
                 modifier = Modifier.weight(1f),
                 testTag = "action_one_time_block"
@@ -247,17 +258,19 @@ fun HomeScreen(
                 )
             }
 
-            TextButton(
-                onClick = { viewModel.clearActivities() },
-                modifier = Modifier.testTag("btn_clear_activities")
-            ) {
-                Text(
-                    text = strings.homeRecentClear,
-                    color = colors.textMuted,
-                    fontSize = 13.sp,
-                    fontFamily = HindSiliguri,
-                    fontWeight = FontWeight.Medium
-                )
+            if (viewModel.activities.any { !it.isSensitive }) {
+                TextButton(
+                    onClick = { viewModel.clearActivities() },
+                    modifier = Modifier.testTag("btn_clear_activities")
+                ) {
+                    Text(
+                        text = strings.homeRecentClear,
+                        color = colors.textMuted,
+                        fontSize = 13.sp,
+                        fontFamily = HindSiliguri,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 
@@ -279,7 +292,8 @@ fun HomeScreen(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (viewModel.activities.isEmpty()) {
+            val homeActivities = viewModel.activities.filter { !it.isSensitive }
+            if (homeActivities.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -294,7 +308,7 @@ fun HomeScreen(
                     )
                 }
             } else {
-                viewModel.activities.forEach { activity ->
+                homeActivities.forEach { activity ->
                     ActivityRowItem(activity = activity)
                 }
             }
@@ -302,6 +316,10 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
     }
+
+    // --- One-Time Block Dialogs ---
+    OneTimeBlockAppSelectionDialog(viewModel = viewModel)
+    OneTimeBlockConfirmationDialog(viewModel = viewModel)
 }
 
 @Composable

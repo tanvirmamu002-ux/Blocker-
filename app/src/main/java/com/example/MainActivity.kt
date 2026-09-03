@@ -51,6 +51,7 @@ import com.example.ui.components.FocusLockEmergencyDialog
 import com.example.ui.screens.FocusLockScreen
 import com.example.ui.components.FocusLockSetupDialog
 import com.example.ui.components.NotificationAlertsDialog
+import com.example.ui.components.OnboardingWelcomeDialog
 import com.example.ui.components.PinLockBottomSheet
 import com.example.ui.components.ProfileDialog
 import com.example.ui.components.ScreenTimeLimitDialog
@@ -106,6 +107,8 @@ fun FocusShieldApp(
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 viewModel.checkPermissions(context)
                 viewModel.checkAndRestoreFocusLock(context)
+                viewModel.checkAndRestoreOneTimeBlock(context)
+                viewModel.checkAndRestoreActivities(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -117,6 +120,8 @@ fun FocusShieldApp(
     LaunchedEffect(Unit) {
         viewModel.bindContext(context)
         viewModel.checkAndRestoreFocusLock(context)
+        viewModel.checkAndRestoreOneTimeBlock(context)
+        viewModel.checkAndRestoreActivities(context)
     }
 
     if (viewModel.focusLockState == FocusLockState.ACTIVE || viewModel.focusLockState == FocusLockState.EMERGENCY_REQUEST) {
@@ -274,6 +279,7 @@ fun FocusShieldApp(
     }
 
     // Interactive Modals & Dialogs
+    OnboardingWelcomeDialog(viewModel = viewModel)
     PinLockBottomSheet(viewModel = viewModel)
     BadgesDialog(viewModel = viewModel)
     AddRoutineDialog(viewModel = viewModel)

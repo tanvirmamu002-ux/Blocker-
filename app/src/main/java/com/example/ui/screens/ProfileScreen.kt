@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
@@ -96,6 +97,7 @@ fun ProfileScreen(
     var editEmail by remember(user.email) { mutableStateOf(user.email) }
     var editPhone by remember(user.phone) { mutableStateOf(user.phone) }
     var editBio by remember(user.bio) { mutableStateOf(user.bio) }
+    var editReligion by remember(user.religion) { mutableStateOf(user.religion) }
 
     Column(
         modifier = modifier
@@ -149,7 +151,7 @@ fun ProfileScreen(
             OutlinedButton(
                 onClick = {
                     if (isEditMode) {
-                        viewModel.updateUserProfile(editName, editEmail, editPhone, editBio)
+                        viewModel.updateUserProfile(editName, editEmail, editPhone, editBio, editReligion)
                         isEditMode = false
                     } else {
                         isEditMode = true
@@ -512,11 +514,39 @@ fun ProfileScreen(
                             .testTag("input_profile_bio")
                     )
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Religion edit
+                    Text(
+                        text = com.example.util.LocalAppStrings.current.profileLabelReligion,
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = editReligion,
+                        onValueChange = { editReligion = it },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = colors.primary,
+                            unfocusedBorderColor = colors.border,
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary,
+                            focusedContainerColor = colors.surfaceElevated,
+                            unfocusedContainerColor = colors.surfaceElevated
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_profile_religion")
+                    )
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
                         onClick = {
-                            viewModel.updateUserProfile(editName, editEmail, editPhone, editBio)
+                            viewModel.updateUserProfile(editName, editEmail, editPhone, editBio, editReligion)
                             isEditMode = false
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -543,9 +573,19 @@ fun ProfileScreen(
                     HorizontalDivider(color = colors.border, modifier = Modifier.padding(vertical = 10.dp))
 
                     ProfileInfoRow(icon = Icons.Default.Badge, label = com.example.util.LocalAppStrings.current.profileLabelBio, value = user.bio)
+                    HorizontalDivider(color = colors.border, modifier = Modifier.padding(vertical = 10.dp))
+
+                    ProfileInfoRow(icon = Icons.Default.AutoAwesome, label = com.example.util.LocalAppStrings.current.profileLabelReligion, value = user.religion)
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // --- Security & Privacy: Protected Activity Section (Located above Logout / Auth) ---
+        ProfileSecurityAndPrivacyCard(
+            viewModel = viewModel
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -630,6 +670,261 @@ fun ProfileScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ProfileSecurityAndPrivacyCard(
+    viewModel: FocusViewModel
+) {
+    val colors = AppTheme.colors
+    val strings = com.example.util.LocalAppStrings.current
+    val isUnlocked = viewModel.isProtectedActivityUnlocked
+    val protectedList = viewModel.protectedActivities
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.border, RoundedCornerShape(18.dp))
+            .padding(16.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header: Icon + Section Title
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.primary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = "Security",
+                            tint = colors.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Column {
+                        Text(
+                            text = strings.profileSecuritySectionTitle,
+                            color = colors.textPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = strings.profileProtectedActivityTitle,
+                            color = colors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                if (isUnlocked) {
+                    IconButton(
+                        onClick = { viewModel.lockProtectedActivity() },
+                        modifier = Modifier.testTag("btn_relock_protected_activity")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = strings.profileProtectedActivityLockAgain,
+                            tint = colors.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (!isUnlocked) {
+                // Locked state: Do NOT reveal any activity name, domain, or details
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.surfaceElevated)
+                        .border(1.dp, colors.border, RoundedCornerShape(14.dp))
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Locked",
+                                tint = colors.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = strings.profileProtectedActivityLocked,
+                            color = colors.textMuted,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = strings.profileProtectedActivityDesc,
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = {
+                                viewModel.showPinBottomSheet(FocusViewModel.PinAction.VIEW_PROTECTED_ACTIVITY)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.primary,
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_unlock_protected_activity")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = strings.profileProtectedActivityUnlock,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Unlocked state: Show real sensitive activities
+                if (protectedList.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.surfaceElevated)
+                            .padding(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = strings.profileProtectedActivityEmpty,
+                            color = colors.textMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        protectedList.forEach { activity ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.surfaceElevated)
+                                    .border(1.dp, colors.border, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(colors.alert.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Shield,
+                                            contentDescription = null,
+                                            tint = colors.alert,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Text(
+                                        text = activity.titleBangla,
+                                        color = colors.textPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                Text(
+                                    text = activity.timeAgoBangla,
+                                    color = colors.textMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            OutlinedButton(
+                                onClick = { viewModel.clearProtectedActivities() },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.alert),
+                                modifier = Modifier.testTag("btn_clear_protected_activity")
+                            ) {
+                                Text(text = strings.profileProtectedActivityClear, fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = { viewModel.lockProtectedActivity() },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.surfaceElevated,
+                                    contentColor = colors.textPrimary
+                                ),
+                                modifier = Modifier.testTag("btn_lock_protected_done")
+                            ) {
+                                Text(text = strings.profileProtectedActivityLockAgain, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
