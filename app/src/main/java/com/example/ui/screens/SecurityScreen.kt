@@ -29,7 +29,9 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
@@ -176,6 +178,18 @@ fun SecurityScreen(
             permissions = viewModel.permissions,
             onTogglePermission = { id -> viewModel.togglePermission(id, context) },
             onGrantAll = { viewModel.grantAllPermissions(context) }
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // ==========================================
+        // 4. ADVANCED PRIVATE DNS FILTERING CARD
+        // ==========================================
+        AdvancedDnsProtectionCard(
+            viewModel = viewModel,
+            onOpenDnsSettings = {
+                com.example.util.FocusPermissionHelper.openPrivateDnsSettings(context)
+            }
         )
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -1363,6 +1377,157 @@ private fun SinglePermissionRow(
                 ),
                 modifier = Modifier.testTag("switch_perm_${permission.id}")
             )
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------------
+// Advanced Private DNS Filtering Prompt Card
+// -----------------------------------------------------------------------------------
+@Composable
+private fun AdvancedDnsProtectionCard(
+    viewModel: FocusViewModel,
+    onOpenDnsSettings: () -> Unit
+) {
+    val colors = AppTheme.colors
+    val strings = com.example.util.LocalAppStrings.current
+    val isBengali = viewModel.appLanguage == com.example.util.AppLanguage.BENGALI
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    listOf(
+                        if (colors.isDark) Color(0xFF0C2028) else Color(0xFFF0F9FF),
+                        if (colors.isDark) Color(0xFF0F1A24) else Color(0xFFFFFFFF)
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF0EA5E9).copy(alpha = 0.5f),
+                        Color(0xFF06B6D4).copy(alpha = 0.3f)
+                    )
+                ),
+                shape = RoundedCornerShape(18.dp)
+            )
+            .padding(16.dp)
+            .testTag("card_advanced_dns_protection")
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF0EA5E9).copy(alpha = 0.16f))
+                        .border(1.dp, Color(0xFF0EA5E9).copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Dns,
+                        contentDescription = "Private DNS",
+                        tint = Color(0xFF0EA5E9),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (isBengali) "অ্যাডভান্সড প্রাইভেট ডিএনএস" else "Advanced Private DNS",
+                            color = colors.textPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = HindSiliguri
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF0EA5E9).copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = if (isBengali) "প্রস্তাবিত" else "Recommended",
+                                color = Color(0xFF0EA5E9),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (isBengali) "সিস্টেম লেভেলে ১০০% অ্যাডাল্ট কনটেন্ট ও ক্ষতিকর ডোমেইন প্রতিরোধ" else "100% adult content and malicious domain blocking at network level",
+                        color = colors.textSecondary,
+                        fontSize = 11.5.sp,
+                        fontFamily = HindSiliguri
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Informational tip box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (colors.isDark) Color(0xFF141D26) else Color(0xFFF1F5F9))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = if (isBengali) "💡 নিচের বাটনে ক্লিক করে ফোনের সেটিংস থেকে Private DNS চালু করুন (যেমন: family.adguard-dns.com বা 1dot1dot1dot3.cloudflare-dns.com)। এটি সব অ্যাপ ও ব্রাউজারে স্বয়ংক্রিয়ভাবে ১৮+ কন্টেন্ট ব্লক রাখবে।" 
+                           else "💡 Tap below to open Settings and set Private DNS (e.g., family.adguard-dns.com). This provides system-wide adult blocking across all apps.",
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    fontFamily = HindSiliguri
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = onOpenDnsSettings,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+                    .testTag("btn_open_dns_settings"),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF0EA5E9),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isBengali) "প্রাইভেট DNS সেটিংস খুলুন" else "Open Private DNS Settings",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = HindSiliguri
+                    )
+                }
+            }
         }
     }
 }

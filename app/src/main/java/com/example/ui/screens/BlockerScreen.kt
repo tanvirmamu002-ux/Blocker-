@@ -103,6 +103,8 @@ import com.example.data.AppScreenTimeLimit
 import com.example.data.BlockedDomain
 import com.example.data.CategoryFilter
 import com.example.state.FocusViewModel
+import com.example.ui.components.ExpandableShortVideoBlockerCard
+import com.example.ui.components.ExpandableSocialMediaBlockerCard
 import com.example.ui.components.RealAppIcon
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.HindSiliguri
@@ -168,12 +170,30 @@ fun BlockerScreen(
                 context = context
             )
 
-            // Standard Category Filters with Switches
+            // Standard Category Filters with Switches & Expandable Sub-App Selectors
             viewModel.categoryFilters.forEach { filter ->
-                CategoryFilterCard(
-                    filter = filter,
-                    onToggle = { viewModel.toggleCategoryFilter(filter.id) }
-                )
+                when (filter.id) {
+                    "social_media" -> {
+                        ExpandableSocialMediaBlockerCard(
+                            filter = filter,
+                            viewModel = viewModel,
+                            context = context
+                        )
+                    }
+                    "shorts_blocker" -> {
+                        ExpandableShortVideoBlockerCard(
+                            filter = filter,
+                            viewModel = viewModel,
+                            context = context
+                        )
+                    }
+                    else -> {
+                        CategoryFilterCard(
+                            filter = filter,
+                            onToggle = { viewModel.toggleCategoryFilter(filter.id) }
+                        )
+                    }
+                }
             }
 
             // Custom Blocklist Card (Expandable serial layout)
@@ -740,7 +760,7 @@ private fun CategoryFilterCard(
         Color(0xFFEF4444)
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
@@ -751,67 +771,92 @@ private fun CategoryFilterCard(
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable(onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 14.dp, vertical = 13.dp)
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(iconBg)
-                    .border(
-                        1.dp,
-                        if (filter.isEnabled) Color(0xFF10B981).copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.25f),
-                        RoundedCornerShape(12.dp)
-                    ),
-                contentAlignment = Alignment.Center
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = filter.titleBangla,
-                    tint = iconTint,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.padding(end = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = filter.titleBangla,
-                        color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(iconBg)
+                        .border(
+                            1.dp,
+                            if (filter.isEnabled) Color(0xFF10B981).copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.25f),
+                            RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = filter.titleBangla,
+                        tint = iconTint,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(2.dp))
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.padding(end = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = filter.titleBangla,
+                            color = colors.textPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = filter.descBangla,
+                        color = if (filter.isEnabled) colors.textSecondary else if (colors.isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
+            Switch(
+                checked = filter.isEnabled,
+                onCheckedChange = { onToggle() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Color(0xFF10B981),
+                    uncheckedThumbColor = if (colors.isDark) Color(0xFFEF4444) else Color(0xFFDC2626),
+                    uncheckedTrackColor = if (colors.isDark) Color(0xFF3B181D) else Color(0xFFFEE2E2),
+                    uncheckedBorderColor = Color(0xFFEF4444).copy(alpha = 0.4f)
+                ),
+                modifier = Modifier.testTag("switch_${filter.id}")
+            )
+        }
+
+        // If adult filter is enabled, show explicit prompt regarding Advanced DNS
+        if (filter.id == "adult" && filter.isEnabled) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF0EA5E9).copy(alpha = 0.12f))
+                    .border(1.dp, Color(0xFF0EA5E9).copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 7.dp)
+            ) {
                 Text(
-                    text = filter.descBangla,
-                    color = if (filter.isEnabled) colors.textSecondary else if (colors.isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
+                    text = "💡 অনুগ্রহ করে নিচে সিকিউরিটি সেকশনে 'অ্যাডভান্সড প্রাইভেট ডিএনএস' চালু করুন — এতে ডিভাইস লেভেলে শতভাগ ১৮+ কনটেন্ট স্বয়ংক্রিয়ভাবে ব্লক থাকবে।",
+                    color = Color(0xFF0284C7),
                     fontSize = 11.sp,
-                    lineHeight = 14.sp
+                    lineHeight = 15.sp,
+                    fontFamily = com.example.ui.theme.HindSiliguri
                 )
             }
         }
-
-        Switch(
-            checked = filter.isEnabled,
-            onCheckedChange = { onToggle() },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF10B981),
-                uncheckedThumbColor = if (colors.isDark) Color(0xFFEF4444) else Color(0xFFDC2626),
-                uncheckedTrackColor = if (colors.isDark) Color(0xFF3B181D) else Color(0xFFFEE2E2),
-                uncheckedBorderColor = Color(0xFFEF4444).copy(alpha = 0.4f)
-            ),
-            modifier = Modifier.testTag("switch_${filter.id}")
-        )
     }
 }
 

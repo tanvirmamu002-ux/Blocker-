@@ -875,7 +875,23 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
         val index = categoryFilters.indexOfFirst { it.id == id }
         if (index != -1) {
             val item = categoryFilters[index]
-            categoryFilters[index] = item.copy(isEnabled = !item.isEnabled)
+            val newState = !item.isEnabled
+            categoryFilters[index] = item.copy(isEnabled = newState)
+
+            val prefs = FocusLockPreferences.getInstance(context)
+            if (id == "adult") {
+                prefs.saveAdultContentBlockerEnabled(newState)
+                if (newState) {
+                    showToast("🛡️ অ্যাডাল্ট কনটেন্ট ও কিওয়ার্ড ব্লকার সক্রিয় করা হয়েছে। সম্পূর্ণ সুরক্ষার জন্য নিচে অ্যাডভান্সড DNS চালু করুন।")
+                } else {
+                    showToast("অ্যাডাল্ট কনটেন্ট ব্লকার নিষ্ক্রিয় করা হয়েছে")
+                }
+            } else if (id == "dns_protection") {
+                prefs.saveDnsProtectionEnabled(newState)
+                if (newState) {
+                    showToast("অ্যাডভান্সড DNS সক্রিয় করা হয়েছে")
+                }
+            }
         }
     }
 

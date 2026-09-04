@@ -5,6 +5,8 @@ import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.data.FocusLockState
+import com.example.data.RecentActivity
+import com.example.util.AdultContentKeywords
 import com.example.util.AppUsageTracker
 import com.example.util.FocusLockPreferences
 import com.example.util.FocusNotificationHelper
@@ -14,6 +16,7 @@ class FocusAccessibilityService : AccessibilityService() {
     private var lastNotificationTimeMs = 0L
     private var lastBlockActionTimeMs = 0L
     private var lastBlockedPackageName = ""
+    private var lastAdultKeywordBlockTimeMs = 0L
 
     private val blockedPackages = setOf(
         "com.facebook.katana",
@@ -82,6 +85,59 @@ class FocusAccessibilityService : AccessibilityService() {
         // 3. Check if One-Time Block is active for this package
         val oneTimeBlockedPackage = prefs.getOneTimeBlockPackage()
         val isOneTimeBlocked = !oneTimeBlockedPackage.isNullOrEmpty() && oneTimeBlockedPackage == packageName
+
+        // 4. Real Keyword Protection System (Adult / NSFW Content Blocker)
+        // Works in browsers and media apps whenever Adult Content Blocker is enabled
+        if (!shouldBlock && !isTimeLimitExceeded && !isOneTimeBlocked && prefs.isAdultContentBlockerEnabled()) {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                val foundAdult = searchForAdultContent(rootNode)
+                rootNode.recycle()
+                if (foundAdult) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastAdultKeywordBlockTimeMs > 1200L) {
+                        lastAdultKeywordBlockTimeMs = now
+
+                        // Trigger immediate BACK action to instantly close/exit the objectionable screen
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+
+                        // Record in Protected Activities
+                        val activity = RecentActivity(
+                            id = System.currentTimeMillis().toString(),
+                            titleBangla = "এডাল্ট কনটেন্ট কিওয়ার্ড প্রতিহত",
+                            titleEnglish = "Adult Content Keyword Blocked",
+                            timeAgoBangla = "এইমাত্র",
+                            timeAgoEnglish = "Just now",
+                            isSuccess = true,
+                            iconType = "shield",
+                            isSensitive = true
+                        )
+                        val currentProtected = prefs.getProtectedActivities().toMutableList()
+                        currentProtected.add(0, activity)
+                        prefs.saveProtectedActivities(currentProtected)
+
+                        // Send security notification if enabled
+                        if (prefs.getNotifSecurity()) {
+                            FocusNotificationHelper.sendSecurityNotification(
+                                context = applicationContext,
+                                title = "সুরক্ষিত ফিল্টার সক্রিয় 🛡️",
+                                message = "এডাল্ট কনটেন্ট শনাক্ত হওয়ায় তাৎক্ষণিক পেজ থেকে ব্যাক করা হয়েছে"
+                            )
+                        }
+
+                        // User feedback via non-intrusive Toast
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            android.widget.Toast.makeText(
+                                applicationContext,
+                                "🛡️ এডাল্ট কনটেন্ট কিওয়ার্ড শনাক্ত হওয়ায় তাৎক্ষণিক ব্যাক করা হয়েছে",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    return
+                }
+            }
+        }
 
         if (shouldBlock || isTimeLimitExceeded || isOneTimeBlocked) {
             val now = System.currentTimeMillis()
@@ -193,6 +249,34 @@ class FocusAccessibilityService : AccessibilityService() {
             if (child != null) {
                 if (searchForDistractingWebsites(child, customDomains, customKeywords)) return true
                 child.recycle()
+            }
+        }
+        return false
+    }
+
+    /**
+     * Traverses the active view hierarchy and checks node text and content descriptions
+     * against the high-risk adult/NSFW keyword protection dictionary.
+     * Recycles child nodes to avoid memory leaks.
+     */
+    private fun searchForAdultContent(node: AccessibilityNodeInfo): Boolean {
+        val text = node.text?.toString()
+        if (AdultContentKeywords.containsAdultKeyword(text)) {
+            return true
+        }
+
+        val desc = node.contentDescription?.toString()
+        if (AdultContentKeywords.containsAdultKeyword(desc)) {
+            return true
+        }
+
+        val childCount = node.childCount
+        for (i in 0 until childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = searchForAdultContent(child)
+                child.recycle()
+                if (found) return true
             }
         }
         return false

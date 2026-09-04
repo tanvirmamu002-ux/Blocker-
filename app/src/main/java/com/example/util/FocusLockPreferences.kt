@@ -438,4 +438,12 @@ class FocusLockPreferences(context: Context) {
 
     fun getUserReligion(): String? = prefs.getString("user_religion", null)
     fun saveUserReligion(religion: String) = prefs.edit().putString("user_religion", religion).apply()
+
+    // Adult Content & Keyword Protection Filter
+    fun isAdultContentBlockerEnabled(): Boolean = prefs.getBoolean("filter_adult_content_blocker", true)
+    fun saveAdultContentBlockerEnabled(enabled: Boolean) = prefs.edit().putBoolean("filter_adult_content_blocker", enabled).apply()
+
+    // Advanced DNS Protection Setting
+    fun isDnsProtectionEnabled(): Boolean = prefs.getBoolean("filter_dns_protection", false)
+    fun saveDnsProtectionEnabled(enabled: Boolean) = prefs.edit().putBoolean("filter_dns_protection", enabled).apply()
 }

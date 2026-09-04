@@ -221,6 +221,25 @@ object FocusPermissionHelper {
         }
     }
 
+    fun openPrivateDnsSettings(context: Context) {
+        try {
+            // Try launching Android Private DNS or Network settings
+            val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val netIntent = Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(netIntent)
+            } catch (e2: Exception) {
+                openGeneralSettings(context)
+            }
+        }
+    }
+
     private fun findActivity(context: Context): android.app.Activity? {
         var current = context
         while (current is android.content.ContextWrapper) {
