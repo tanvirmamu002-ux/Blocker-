@@ -145,7 +145,7 @@ private fun ScheduleMainView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Focus Routines",
                     color = colors.textPrimary,
@@ -157,25 +157,6 @@ private fun ScheduleMainView(
                     text = "Plan your focus. Protect your time.",
                     color = colors.textSecondary,
                     fontSize = 12.sp
-                )
-            }
-
-            // Top Right + Icon Button
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(colors.surfaceElevated)
-                    .border(1.dp, colors.border, CircleShape)
-                    .clickable { viewModel.isCreateRoutineScreenVisible = true }
-                    .testTag("btn_header_add_routine"),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Create Routine",
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(20.dp)
                 )
             }
         }

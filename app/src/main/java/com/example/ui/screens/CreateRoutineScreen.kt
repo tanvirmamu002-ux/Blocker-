@@ -62,7 +62,6 @@ fun CreateRoutineScreen(
     var selectedIconType by remember { mutableStateOf("book") }
     var blockShorts by remember { mutableStateOf(true) }
     var blockWebsites by remember { mutableStateOf(true) }
-    var isStrict by remember { mutableStateOf(true) }
 
     fun calculateDuration(start: String, end: String): String {
         try {
@@ -122,7 +121,7 @@ fun CreateRoutineScreen(
             iconType = selectedIconType,
             blockShorts = blockShorts,
             blockWebsites = blockWebsites,
-            isStrict = isStrict,
+            isStrict = false,
             isEnabled = true,
             isActiveNow = false
         )
@@ -245,8 +244,6 @@ fun CreateRoutineScreen(
                                 onBlockShortsChange = { blockShorts = it },
                                 blockWebsites = blockWebsites,
                                 onBlockWebsitesChange = { blockWebsites = it },
-                                isStrict = isStrict,
-                                onStrictChange = { isStrict = it },
                                 onBack = { currentStep = 2 },
                                 onNext = { currentStep = 4 }
                             )
@@ -260,7 +257,6 @@ fun CreateRoutineScreen(
                                 selectedAppPackages = selectedAppPackages,
                                 blockShorts = blockShorts,
                                 blockWebsites = blockWebsites,
-                                isStrict = isStrict,
                                 onBack = { currentStep = 3 },
                                 onSave = { saveRoutine() }
                             )
@@ -664,8 +660,6 @@ private fun StepSettings(
     onBlockShortsChange: (Boolean) -> Unit,
     blockWebsites: Boolean,
     onBlockWebsitesChange: (Boolean) -> Unit,
-    isStrict: Boolean,
-    onStrictChange: (Boolean) -> Unit,
     onBack: () -> Unit,
     onNext: () -> Unit
 ) {
@@ -744,12 +738,6 @@ private fun StepSettings(
             }
             Switch(checked = blockWebsites, onCheckedChange = onBlockWebsitesChange, colors = SwitchDefaults.colors(checkedTrackColor = colors.primary))
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "Strict Mode (Hard to bypass)", color = colors.alert, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            }
-            Switch(checked = isStrict, onCheckedChange = onStrictChange, colors = SwitchDefaults.colors(checkedTrackColor = colors.alert))
-        }
 
         Spacer(modifier = Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -774,7 +762,6 @@ private fun StepReview(
     selectedAppPackages: List<String>,
     blockShorts: Boolean,
     blockWebsites: Boolean,
-    isStrict: Boolean,
     onBack: () -> Unit,
     onSave: () -> Unit
 ) {
@@ -822,10 +809,6 @@ private fun StepReview(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(text = "Shorts & Websites:", color = colors.textSecondary, fontSize = 12.sp)
                     Text(text = if (blockShorts && blockWebsites) "Active" else "Custom", color = colors.primaryBright, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(text = "Protection Mode:", color = colors.textSecondary, fontSize = 12.sp)
-                    Text(text = if (isStrict) "Strict" else "Standard", color = if (isStrict) colors.alert else colors.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

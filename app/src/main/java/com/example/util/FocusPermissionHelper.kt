@@ -68,8 +68,12 @@ object FocusPermissionHelper {
                 isExactAlarmPermissionGranted(context) &&
                 isOverlayPermissionGranted(context) &&
                 isNotificationPermissionGranted(context) &&
-                isBatteryOptimizationDisabled(context) &&
-                isDeviceAdminGranted(context)
+                isBatteryOptimizationDisabled(context)
+    }
+
+    fun isFocusLockPermissionGranted(context: Context): Boolean {
+        // Focus Lock strictly requires Accessibility permission to detect foreground apps/shorts and block them
+        return isAccessibilityPermissionGranted(context)
     }
 
     fun isExactAlarmPermissionGranted(context: Context): Boolean {
@@ -88,8 +92,23 @@ object FocusPermissionHelper {
 
     fun isDeviceAdminGranted(context: Context): Boolean {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
-        val componentName = android.content.ComponentName(context, "com.example.receiver.FocusDeviceAdminReceiver")
+        val componentName = android.content.ComponentName(context, com.example.receiver.FocusDeviceAdminReceiver::class.java)
         return dpm?.isAdminActive(componentName) ?: false
+    }
+
+    fun removeDeviceAdmin(context: Context): Boolean {
+        return try {
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager ?: return false
+            val componentName = android.content.ComponentName(context, com.example.receiver.FocusDeviceAdminReceiver::class.java)
+            if (dpm.isAdminActive(componentName)) {
+                dpm.removeActiveAdmin(componentName)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun openAccessibilitySettings(context: Context) {
@@ -175,16 +194,40 @@ object FocusPermissionHelper {
 
     fun openDeviceAdminSettings(context: Context) {
         try {
-            val componentName = android.content.ComponentName(context, "com.example.receiver.FocusDeviceAdminReceiver")
+            val componentName = android.content.ComponentName(context, com.example.receiver.FocusDeviceAdminReceiver::class.java)
             val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                 putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, componentName)
-                putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Required to prevent uninstallation during focus lock.")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "ফোকাস সেশন চলাকালীন অসাবধানতাবশত অ্যাপ আনইনস্টল হওয়া প্রতিরোধ করতে এই পারমিশনটি ব্যবহার করা হয়।")
             }
-            context.startActivity(intent)
+            val activity = findActivity(context)
+            if (activity != null) {
+                // DO NOT add FLAG_ACTIVITY_NEW_TASK: Android DeviceAdminAdd explicitly terminates if this flag is present!
+                activity.startActivity(intent)
+            } else {
+                val secIntent = Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(secIntent)
+            }
         } catch (e: Exception) {
-            openGeneralSettings(context)
+            try {
+                val secIntent = Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(secIntent)
+            } catch (e2: Exception) {
+                openGeneralSettings(context)
+            }
         }
+    }
+
+    private fun findActivity(context: Context): android.app.Activity? {
+        var current = context
+        while (current is android.content.ContextWrapper) {
+            if (current is android.app.Activity) return current
+            current = current.baseContext
+        }
+        return null
     }
 
     private fun openGeneralSettings(context: Context) {

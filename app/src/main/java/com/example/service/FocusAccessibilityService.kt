@@ -12,6 +12,8 @@ import com.example.util.FocusNotificationHelper
 class FocusAccessibilityService : AccessibilityService() {
 
     private var lastNotificationTimeMs = 0L
+    private var lastBlockActionTimeMs = 0L
+    private var lastBlockedPackageName = ""
 
     private val blockedPackages = setOf(
         "com.facebook.katana",
@@ -82,23 +84,37 @@ class FocusAccessibilityService : AccessibilityService() {
         val isOneTimeBlocked = !oneTimeBlockedPackage.isNullOrEmpty() && oneTimeBlockedPackage == packageName
 
         if (shouldBlock || isTimeLimitExceeded || isOneTimeBlocked) {
-            // Perform HOME action to exit blocked app immediately
+            val now = System.currentTimeMillis()
+            // Debounce blocking actions for the same package within 1.5 seconds to prevent spam and crashes
+            if (now - lastBlockActionTimeMs < 1500L && packageName == lastBlockedPackageName) {
+                return
+            }
+            lastBlockActionTimeMs = now
+            lastBlockedPackageName = packageName
+
+            // 1. Perform HOME action to exit blocked app immediately and return user safely to their home screen
             performGlobalAction(GLOBAL_ACTION_HOME)
 
-            // Send notification alert if enabled
-            val now = System.currentTimeMillis()
-            if (now - lastNotificationTimeMs > 3000L) {
-                lastNotificationTimeMs = now
-                if (prefs.getNotifBlocking()) {
-                    val appName = try {
-                        val pm = applicationContext.packageManager
-                        val appInfo = pm.getApplicationInfo(packageName, 0)
-                        pm.getApplicationLabel(appInfo).toString()
-                    } catch (e: Exception) {
-                        packageName
-                    }
+            // Resolve friendly App Name
+            val appName = try {
+                val pm = applicationContext.packageManager
+                val appInfo = pm.getApplicationInfo(packageName, 0)
+                pm.getApplicationLabel(appInfo).toString()
+            } catch (e: Exception) {
+                packageName
+            }
+
+            // 2. Send notification alert with live countdown if enabled
+            if (prefs.getNotifBlocking()) {
+                if (isOneTimeBlocked) {
+                    val endTimeMs = prefs.getOneTimeBlockEndTimeMs()
+                    FocusNotificationHelper.sendOneTimeBlockNotification(
+                        context = applicationContext,
+                        appName = appName,
+                        endTimeMs = endTimeMs
+                    )
+                } else {
                     val blockReason = when {
-                        isOneTimeBlocked -> "এককালীন ব্লক সক্রিয় থাকায় অ্যাপটি বন্ধ করা হয়েছে"
                         isTimeLimitExceeded -> "দৈনিক স্ক্রিন টাইম লিমিট শেষ হয়ে যাওয়ায় অ্যাপটি বন্ধ করা হয়েছে"
                         else -> "ফোকাস লক সক্রিয় থাকায় প্রবেশ প্রতিহত করা হয়েছে"
                     }
@@ -110,16 +126,21 @@ class FocusAccessibilityService : AccessibilityService() {
                 }
             }
 
-            // Launch Focus Shield to display blocking screen
-            val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)?.apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                putExtra("BLOCK_TRIGGERED", true)
-                putExtra("BLOCKED_PACKAGE", packageName)
-                putExtra("IS_TIME_LIMIT_EXCEEDED", isTimeLimitExceeded)
-                putExtra("IS_ONE_TIME_BLOCKED", isOneTimeBlocked)
-            }
-            if (launchIntent != null) {
-                applicationContext.startActivity(launchIntent)
+            // 3. User feedback via Toast on Main Thread without crashing or bouncing into MainActivity
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                val toastMsg = if (isOneTimeBlocked) {
+                    val remainingMs = prefs.getOneTimeBlockRemainingMs().coerceAtLeast(0L)
+                    val remainingMinutes = ((remainingMs + 59999L) / 60000L).coerceAtLeast(1)
+                    val hours = remainingMinutes / 60
+                    val mins = remainingMinutes % 60
+                    val timeText = if (hours > 0) "$hours ঘণ্টা $mins মিনিট" else "$mins মিনিট"
+                    "🔒 \"$appName\" সাময়িকভাবে ব্লক রয়েছে। আর $timeText পর ব্যবহার করতে পারবেন।"
+                } else if (isTimeLimitExceeded) {
+                    "⏳ \"$appName\"-এর দৈনিক স্ক্রিন টাইম লিমিট শেষ হয়েছে।"
+                } else {
+                    "🛡️ ফোকাস লক সক্রিয় থাকায় \"$appName\" বন্ধ করা হয়েছে।"
+                }
+                android.widget.Toast.makeText(applicationContext, toastMsg, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }

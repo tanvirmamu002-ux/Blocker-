@@ -121,6 +121,60 @@ object FocusNotificationHelper {
         }
     }
 
+    fun sendOneTimeBlockNotification(context: Context, appName: String, endTimeMs: Long) {
+        if (!FocusPermissionHelper.isNotificationPermissionGranted(context)) return
+        initNotificationChannels(context)
+
+        val remainingMs = (endTimeMs - System.currentTimeMillis()).coerceAtLeast(0L)
+        val remainingMinutes = ((remainingMs + 59999L) / 60000L).coerceAtLeast(1)
+        val hours = remainingMinutes / 60
+        val mins = remainingMinutes % 60
+        val timeRemainingText = if (hours > 0) {
+            if (mins > 0) "$hours ঘণ্টা $mins মিনিট" else "$hours ঘণ্টা"
+        } else {
+            "$mins মিনিট"
+        }
+
+        val pendingIntent = getLaunchIntent(context)
+        val title = "🛡️ $appName প্রতিহত করা হয়েছে"
+        val currentReason = "এককালীন ব্লক সক্রিয় থাকায় অ্যাপটি বন্ধ করা হয়েছে"
+        val liveText = "$currentReason। আর $timeRemainingText পর ব্যবহার করা যাবে।"
+        val bigText = "$currentReason।\n⏳ আর $timeRemainingText পর $appName আবার ব্যবহার করা যাবে।"
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(liveText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+
+        // Native live ticking countdown for Android 7.0+
+        if (endTimeMs > System.currentTimeMillis()) {
+            builder.setWhen(endTimeMs)
+            builder.setUsesChronometer(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                builder.setChronometerCountDown(true)
+            }
+        }
+
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_BLOCK, builder.build())
+        } catch (e: SecurityException) {
+            // Permission not granted
+        }
+    }
+
+    fun cancelBlockNotification(context: Context) {
+        try {
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_BLOCK)
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
     fun sendTimerNotification(context: Context, title: String, message: String, isOngoing: Boolean = false) {
         if (!FocusPermissionHelper.isNotificationPermissionGranted(context)) return
         initNotificationChannels(context)

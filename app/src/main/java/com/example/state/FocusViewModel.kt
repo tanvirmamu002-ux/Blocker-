@@ -162,6 +162,7 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
                 if (remainingMs <= 0L) {
                     val finishedApp = oneTimeBlockedAppName ?: "অ্যাপ"
                     clearOneTimeBlockState(context)
+                    FocusNotificationHelper.cancelBlockNotification(context)
                     recordNewActivity(
                         RecentActivity(
                             id = System.currentTimeMillis().toString(),
@@ -226,6 +227,13 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
 
         startOneTimeBlockTicker(context)
 
+        // Send initial live countdown notification
+        FocusNotificationHelper.sendOneTimeBlockNotification(
+            context = context,
+            appName = app.name,
+            endTimeMs = prefs.getOneTimeBlockEndTimeMs()
+        )
+
         blockedAttemptsToday += 1
         recordNewActivity(
             RecentActivity(
@@ -258,6 +266,7 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
         oneTimeBlockedAppName = null
         isQuickBlockNowActive = false
         remainingOneTimeBlockSeconds = 0
+        FocusNotificationHelper.cancelBlockNotification(context)
     }
 
     fun closeOneTimeBlockDialogs() {
@@ -305,8 +314,8 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
             return
         }
 
-        if (!FocusPermissionHelper.areAllRequiredPermissionsGranted(context)) {
-            showToast("এই ফিচারটি চালু করার জন্য কিছু পারমিশনের প্রয়োজন। সেটিংসে গিয়ে পারমিশনগুলো চালু করুন।")
+        if (!FocusPermissionHelper.isFocusLockPermissionGranted(context)) {
+            showToast("ফোকাস লক সক্রিয় করতে 'অ্যাক্সেসিবিলিটি' পারমিশনটি চালু করুন।")
             scrollToPermissionsRequested = true
             selectTab(NavigationTab.SETTINGS)
         } else {
@@ -1572,7 +1581,39 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
                     "device_admin" -> FocusPermissionHelper.openDeviceAdminSettings(context)
                 }
             } else {
-                showToast("এই পারমিশনটি ইতোমধ্যেই দেওয়া আছে।")
+                // Granted, allow user to revoke/disable via settings or direct removal
+                when (id) {
+                    "device_admin" -> {
+                        val removed = FocusPermissionHelper.removeDeviceAdmin(context)
+                        checkPermissions(context)
+                        if (removed) {
+                            showToast("ডিভাইস অ্যাডমিন পারমিশন বন্ধ করা হয়েছে")
+                        } else {
+                            FocusPermissionHelper.openDeviceAdminSettings(context)
+                            showToast("ডিভাইস অ্যাডমিন নিষ্ক্রিয় করতে সেটিংস থেকে অফ করুন")
+                        }
+                    }
+                    "accessibility" -> {
+                        FocusPermissionHelper.openAccessibilitySettings(context)
+                        showToast("অ্যাক্সেসিবিলিটি পারমিশন বন্ধ করতে সেটিংসের সুইচটি অফ করুন")
+                    }
+                    "exact_alarm" -> {
+                        FocusPermissionHelper.openExactAlarmSettings(context)
+                        showToast("অ্যালার্ম পারমিশন বন্ধ করতে সেটিংসের সুইচটি অফ করুন")
+                    }
+                    "notification" -> {
+                        FocusPermissionHelper.openNotificationSettings(context)
+                        showToast("নোটিফিকেশন বন্ধ করতে সেটিংসের সুইচটি অফ করুন")
+                    }
+                    "overlay" -> {
+                        FocusPermissionHelper.openOverlaySettings(context)
+                        showToast("ডিসপ্লে ওভারলে পারমিশন বন্ধ করতে সেটিংসের সুইচটি অফ করুন")
+                    }
+                    "battery" -> {
+                        FocusPermissionHelper.openBatteryOptimizationSettings(context)
+                        showToast("ব্যাটারি অপটিমাইজেশন সেটিংস ওপেন করা হচ্ছে")
+                    }
+                }
             }
         }
     }
