@@ -35,10 +35,12 @@ import com.example.util.FocusLockPreferences
 import com.example.util.FocusPermissionHelper
 import com.example.util.AppLanguage
 import com.example.util.AppLanguageManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class FocusViewModel(application: android.app.Application) : androidx.lifecycle.AndroidViewModel(application) {
     private val context: Context
@@ -524,14 +526,21 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
 
     // --- Per-App Screen Time Limits State (24-Hour Cycle Management) ---
     val appScreenTimeLimits = mutableStateListOf<AppScreenTimeLimit>()
+    var isAppLimitsLoading by mutableStateOf(false)
     var selectedAppForLimitSlider by mutableStateOf<AppScreenTimeLimit?>(null)
     var isAppSliderDialogVisible by mutableStateOf(false)
 
-    fun loadPerAppLimits(context: Context) {
+    fun loadPerAppLimits(context: Context, forceRefresh: Boolean = false) {
+        if (appScreenTimeLimits.isEmpty()) {
+            isAppLimitsLoading = true
+        }
         viewModelScope.launch {
-            val list = AppUsageTracker.loadMergedAppsList(context)
+            val list = withContext(Dispatchers.IO) {
+                AppUsageTracker.loadMergedAppsList(context, forceRefresh = forceRefresh)
+            }
             appScreenTimeLimits.clear()
             appScreenTimeLimits.addAll(list)
+            isAppLimitsLoading = false
         }
     }
 

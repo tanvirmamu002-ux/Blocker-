@@ -3,6 +3,7 @@ package com.example.util
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -21,6 +22,24 @@ object AppUsageTracker {
     private const val KEY_ENABLED_PREFIX = "enabled_"
     private const val KEY_STRICT_PREFIX = "strict_"
     private const val KEY_LAST_RESET_DATE = "last_reset_date"
+
+    // High-performance In-Memory Cache for fast UI loading
+    private val installedAppsCache = java.util.concurrent.ConcurrentHashMap<String, String>() // pkg -> appLabel
+    private val appIconCache = android.util.LruCache<String, android.graphics.drawable.Drawable>(120) // Fast in-memory icon cache
+    private var cachedAppLimitsList: List<AppScreenTimeLimit>? = null
+    private var lastMergedAppsTimestamp: Long = 0L
+    private const val MERGED_CACHE_TTL_MS = 5000L // 5 seconds instant cache
+
+    fun getCachedAppIcon(context: Context, packageName: String): android.graphics.drawable.Drawable? {
+        appIconCache.get(packageName)?.let { return it }
+        return try {
+            val drawable = context.packageManager.getApplicationIcon(packageName)
+            appIconCache.put(packageName, drawable)
+            drawable
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -95,6 +114,7 @@ object AppUsageTracker {
             .putBoolean("$KEY_ENABLED_PREFIX$packageName", isEnabled)
             .putBoolean("$KEY_STRICT_PREFIX$packageName", isStrict)
             .apply()
+        invalidateCache()
     }
 
     /**
@@ -107,6 +127,7 @@ object AppUsageTracker {
             .remove("$KEY_ENABLED_PREFIX$packageName")
             .remove("$KEY_STRICT_PREFIX$packageName")
             .apply()
+        invalidateCache()
     }
 
     /**
@@ -269,73 +290,123 @@ object AppUsageTracker {
         )
     )
 
+    fun invalidateCache() {
+        cachedAppLimitsList = null
+        lastMergedAppsTimestamp = 0L
+    }
+
     /**
      * Load device installed apps combined with saved limits & real usage
+     * Uses in-memory caching and fast resolveInfo caching for instantaneous UI rendering.
+     * Only returns real apps actually installed on the user's device.
      */
-    fun loadMergedAppsList(context: Context): List<AppScreenTimeLimit> {
+    fun loadMergedAppsList(context: Context, forceRefresh: Boolean = false): List<AppScreenTimeLimit> {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh && cachedAppLimitsList != null && (now - lastMergedAppsTimestamp) < MERGED_CACHE_TTL_MS) {
+            return cachedAppLimitsList!!
+        }
+
         val usageMap = getTodayUsageStatsMap(context)
         val pm = context.packageManager
 
         val result = mutableListOf<AppScreenTimeLimit>()
         val seenPackages = mutableSetOf<String>()
 
-        // 1. First populate from default popular catalog
-        for (item in defaultCatalogApps) {
-            val (savedLimit, isEnabled, isStrict) = getAppLimitConfig(context, item.packageName)
-            val realUsage = usageMap[item.packageName] ?: item.usedMinutesToday
-            val effectiveLimit = if (savedLimit > 0) savedLimit else item.limitMinutes
-            val effectiveEnabled = if (savedLimit > 0) isEnabled else item.isEnabled
-            val effectiveStrict = if (savedLimit > 0) isStrict else item.isStrict
-
-            result.add(
-                item.copy(
-                    limitMinutes = effectiveLimit,
-                    usedMinutesToday = realUsage,
-                    isEnabled = effectiveEnabled,
-                    isStrict = effectiveStrict
-                )
-            )
-            seenPackages.add(item.packageName)
-        }
-
-        // 2. Scan device installed applications
+        // 1. Scan launchable device installed applications (User visible apps)
         try {
-            val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            for (app in installedApps) {
-                val pkg = app.packageName
+            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            }
+            val resolveInfos = pm.queryIntentActivities(mainIntent, 0)
+            for (resolveInfo in resolveInfos) {
+                val pkg = resolveInfo.activityInfo?.packageName ?: continue
+                if (pkg == context.packageName) continue // Exclude this blocker app
                 if (seenPackages.contains(pkg)) continue
-                if (pkg == context.packageName) continue
+                seenPackages.add(pkg)
 
-                // Check if it's a launchable app
-                val isLaunchable = pm.getLaunchIntentForPackage(pkg) != null
-                val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-
-                if (isLaunchable || !isSystem) {
-                    val appLabel = app.loadLabel(pm).toString()
-                    val (savedLimit, isEnabled, isStrict) = getAppLimitConfig(context, pkg)
-                    val realUsage = usageMap[pkg] ?: 0
-
-                    result.add(
-                        AppScreenTimeLimit(
-                            packageName = pkg,
-                            appNameBangla = appLabel,
-                            appNameEnglish = appLabel,
-                            iconType = "generic",
-                            limitMinutes = savedLimit,
-                            usedMinutesToday = realUsage,
-                            isEnabled = isEnabled,
-                            isStrict = isStrict,
-                            category = if (isSystem) "সিস্টেম অ্যাপ" else "অন্যান্য ইনস্টল করা অ্যাপ"
-                        )
-                    )
-                    seenPackages.add(pkg)
+                // Check label cache first to prevent slow disk/IPC calls
+                val cachedLabel = installedAppsCache[pkg]
+                val finalName = if (!cachedLabel.isNullOrBlank()) {
+                    cachedLabel
+                } else {
+                    val appLabel = resolveInfo.loadLabel(pm)?.toString()?.trim()
+                    val resolved = if (!appLabel.isNullOrBlank()) appLabel else pkg
+                    installedAppsCache[pkg] = resolved
+                    resolved
                 }
+
+                val (savedLimit, isEnabled, isStrict) = getAppLimitConfig(context, pkg)
+                val realUsage = usageMap[pkg] ?: 0
+
+                result.add(
+                    AppScreenTimeLimit(
+                        packageName = pkg,
+                        appNameBangla = finalName,
+                        appNameEnglish = finalName,
+                        iconType = "generic",
+                        limitMinutes = savedLimit,
+                        usedMinutesToday = realUsage,
+                        isEnabled = isEnabled,
+                        isStrict = isStrict,
+                        category = "ইনস্টল করা অ্যাপ"
+                    )
+                )
             }
         } catch (e: Exception) {
-            // Ignore if permission or restricted
+            // Ignore if query fails
         }
 
-        return result
+        // 2. Fallback: If queryIntentActivities was empty, scan non-system or launchable installed apps
+        if (result.isEmpty()) {
+            try {
+                val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                for (app in installedApps) {
+                    val pkg = app.packageName ?: continue
+                    if (pkg == context.packageName) continue
+                    if (seenPackages.contains(pkg)) continue
+
+                    val isLaunchable = pm.getLaunchIntentForPackage(pkg) != null
+                    val isNonSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+
+                    if (isLaunchable || isNonSystem) {
+                        val cachedLabel = installedAppsCache[pkg]
+                        val finalName = if (!cachedLabel.isNullOrBlank()) {
+                            cachedLabel
+                        } else {
+                            val appLabel = app.loadLabel(pm)?.toString()?.trim()
+                            val resolved = if (!appLabel.isNullOrBlank()) appLabel else pkg
+                            installedAppsCache[pkg] = resolved
+                            resolved
+                        }
+
+                        val (savedLimit, isEnabled, isStrict) = getAppLimitConfig(context, pkg)
+                        val realUsage = usageMap[pkg] ?: 0
+
+                        result.add(
+                            AppScreenTimeLimit(
+                                packageName = pkg,
+                                appNameBangla = finalName,
+                                appNameEnglish = finalName,
+                                iconType = "generic",
+                                limitMinutes = savedLimit,
+                                usedMinutesToday = realUsage,
+                                isEnabled = isEnabled,
+                                isStrict = isStrict,
+                                category = "ইনস্টল করা অ্যাপ"
+                            )
+                        )
+                        seenPackages.add(pkg)
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+
+        val sortedList = result.sortedBy { it.appNameBangla.lowercase() }
+        cachedAppLimitsList = sortedList
+        lastMergedAppsTimestamp = now
+        return sortedList
     }
 
     /**

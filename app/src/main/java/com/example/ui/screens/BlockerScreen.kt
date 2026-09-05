@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -63,6 +64,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -99,15 +101,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.AppScreenTimeLimit
 import com.example.data.BlockedDomain
 import com.example.data.CategoryFilter
 import com.example.state.FocusViewModel
+import com.example.ui.components.AppTimeLimitSliderDialog
 import com.example.ui.components.ExpandableShortVideoBlockerCard
 import com.example.ui.components.ExpandableSocialMediaBlockerCard
 import com.example.ui.components.RealAppIcon
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.HindSiliguri
+import com.example.util.AppUsageTracker
 import kotlin.math.roundToInt
 
 @Composable
@@ -222,13 +228,40 @@ private fun AppScreenTimeLimitExpandableCard(
 ) {
     val colors = AppTheme.colors
     var isExpanded by remember { mutableStateOf(false) }
-    var selectedCategoryFilter by remember { mutableStateOf("সবগুলো") }
+    var selectedCategoryFilter by remember { mutableStateOf("সমস্ত অ্যাপস") }
 
     val chevronRotation by animateFloatAsState(
         targetValue = if (isExpanded) 90f else 0f,
         animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label = "chevron_rotation"
     )
+
+    // Modal dialog when an app is tapped to set its screen time limit
+    if (viewModel.isAppSliderDialogVisible && viewModel.selectedAppForLimitSlider != null) {
+        Dialog(
+            onDismissRequest = { viewModel.closeAppSliderDialog() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            AppTimeLimitSliderDialog(
+                app = viewModel.selectedAppForLimitSlider!!,
+                onDismiss = { viewModel.closeAppSliderDialog() },
+                onSaveLimit = { minutes, isStrict ->
+                    viewModel.saveAppLimit(
+                        context = context,
+                        packageName = viewModel.selectedAppForLimitSlider!!.packageName,
+                        limitMinutes = minutes,
+                        isStrict = isStrict
+                    )
+                },
+                onRemoveLimit = {
+                    viewModel.removeAppLimit(
+                        context = context,
+                        packageName = viewModel.selectedAppForLimitSlider!!.packageName
+                    )
+                }
+            )
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -251,7 +284,12 @@ private fun AppScreenTimeLimitExpandableCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded }
+                    .clickable {
+                        isExpanded = !isExpanded
+                        if (isExpanded && viewModel.appScreenTimeLimits.isEmpty()) {
+                            viewModel.loadPerAppLimits(context)
+                        }
+                    }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -421,7 +459,7 @@ private fun AppScreenTimeLimitExpandableCard(
                                     .background(colors.borderSubtle)
                             )
 
-                            // Locked Apps Stat (Non-button, factual count)
+                            // Locked Apps Stat
                             Column(
                                 modifier = Modifier.weight(1f),
                                 horizontalAlignment = Alignment.End
@@ -434,9 +472,9 @@ private fun AppScreenTimeLimitExpandableCard(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = if (lockedCount > 0) "$lockedCount টি লকড" else "০ টি",
-                                    color = if (lockedCount > 0) colors.alert else colors.secondary,
-                                    fontSize = 14.sp,
+                                    text = if (lockedCount > 0) "$lockedCount টি" else "০ টি",
+                                    color = if (lockedCount > 0) colors.alert else colors.textPrimary,
+                                    fontSize = 15.sp,
                                     fontFamily = HindSiliguri,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -446,13 +484,13 @@ private fun AppScreenTimeLimitExpandableCard(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // 2. Category Filter Row
-                    val filterCategories = listOf("সবগুলো", "সীমা সক্রিয়", "সোশ্যাল মিডিয়া", "ভিডিও ও বিনোদন", "শর্ট ভিডিও")
+                    // 2. Exact 3 Category Filter Chips as requested
+                    val filterCategories = listOf("সমস্ত অ্যাপস", "ইতিমধ্যে সিলেক্ট করা", "বর্তমানে ব্লক করা")
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         filterCategories.forEach { category ->
                             val isSelected = selectedCategoryFilter == category
@@ -469,12 +507,12 @@ private fun AppScreenTimeLimitExpandableCard(
                                         RoundedCornerShape(10.dp)
                                     )
                                     .clickable { selectedCategoryFilter = category }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 12.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = category,
                                     color = if (isSelected) Color(0xFFFF8800) else colors.textSecondary,
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
                                     fontFamily = HindSiliguri,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                 )
@@ -484,33 +522,46 @@ private fun AppScreenTimeLimitExpandableCard(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // 3. Real Installed App List (Sorted Alphabetically A-B-C)
+                    // 3. Real Installed App List (Filtered by selected category)
                     val sortedAndFilteredApps = remember(viewModel.appScreenTimeLimits.toList(), selectedCategoryFilter) {
                         viewModel.appScreenTimeLimits.filter { app ->
                             when (selectedCategoryFilter) {
-                                "সবগুলো" -> true
-                                "সীমা সক্রিয়" -> app.isEnabled && app.limitMinutes > 0
-                                "সোশ্যাল মিডিয়া" -> app.category.contains("সোশ্যাল", ignoreCase = true) ||
-                                        app.category.contains("Social", ignoreCase = true) ||
-                                        app.packageName.contains("facebook", ignoreCase = true) ||
-                                        app.packageName.contains("instagram", ignoreCase = true) ||
-                                        app.packageName.contains("twitter", ignoreCase = true)
-                                "ভিডিও ও বিনোদন" -> app.category.contains("ভিডিও", ignoreCase = true) ||
-                                        app.category.contains("বিনোদন", ignoreCase = true) ||
-                                        app.category.contains("Video", ignoreCase = true) ||
-                                        app.packageName.contains("youtube", ignoreCase = true) ||
-                                        app.packageName.contains("netflix", ignoreCase = true)
-                                "শর্ট ভিডিও" -> app.category.contains("শর্ট", ignoreCase = true) ||
-                                        app.packageName.contains("tiktok", ignoreCase = true) ||
-                                        app.packageName.contains("musically", ignoreCase = true) ||
-                                        app.packageName.contains("youtube", ignoreCase = true) ||
-                                        app.packageName.contains("instagram", ignoreCase = true)
+                                "সমস্ত অ্যাপস" -> true
+                                "ইতিমধ্যে সিলেক্ট করা" -> app.isEnabled && app.limitMinutes > 0
+                                "বর্তমানে ব্লক করা" -> app.isEnabled && app.limitMinutes > 0 && app.usedMinutesToday >= app.limitMinutes
                                 else -> true
                             }
                         }.sortedBy { it.appNameBangla.lowercase() }
                     }
 
-                    if (sortedAndFilteredApps.isEmpty()) {
+                    if (viewModel.isAppLimitsLoading && viewModel.appScreenTimeLimits.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFFFF8800),
+                                    modifier = Modifier.size(32.dp),
+                                    strokeWidth = 3.dp
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = "অ্যাপস তালিকা লোড হচ্ছে...",
+                                    color = colors.textSecondary,
+                                    fontSize = 12.sp,
+                                    fontFamily = HindSiliguri
+                                )
+                            }
+                        }
+                    } else if (sortedAndFilteredApps.isEmpty()) {
+                        val emptyMessage = when (selectedCategoryFilter) {
+                            "ইতিমধ্যে সিলেক্ট করা" -> "এখনও কোনো অ্যাপ সিলেক্ট করা হয়নি"
+                            "বর্তমানে ব্লক করা" -> "বর্তমানে কোনো অ্যাপ ব্লক বা লকড নেই"
+                            else -> "কোনো অ্যাপ পাওয়া যায়নি"
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -526,7 +577,7 @@ private fun AppScreenTimeLimitExpandableCard(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "এই ক্যাটাগরিতে কোনো অ্যাপ নেই",
+                                    text = emptyMessage,
                                     color = colors.textSecondary,
                                     fontSize = 12.sp,
                                     fontFamily = HindSiliguri
@@ -554,8 +605,8 @@ private fun AppScreenTimeLimitExpandableCard(
 }
 
 /**
- * Individual App Item displaying authentic App Icon, Name, Package Name,
- * real foreground usage time, and active limit state.
+ * Individual App Item displaying authentic App Icon and App Name only (No Package Name, No Demo Apps).
+ * Displays real foreground usage today and active limit / lock state.
  */
 @Composable
 private fun RealAppScreenTimeRowItem(
@@ -566,15 +617,10 @@ private fun RealAppScreenTimeRowItem(
     val colors = AppTheme.colors
     val hasLimit = app.isEnabled && app.limitMinutes > 0
     val isExceeded = hasLimit && app.usedMinutesToday >= app.limitMinutes
-    val progress = if (hasLimit) (app.usedMinutesToday.toFloat() / app.limitMinutes.toFloat()).coerceIn(0f, 1f) else 0f
 
-    // Fetch real drawable icon from PackageManager
-    val appIconDrawable = remember(app.packageName) {
-        try {
-            context.packageManager.getApplicationIcon(app.packageName)
-        } catch (e: Exception) {
-            null
-        }
+    // Fetch real drawable icon from high-performance cache
+    val appIconDrawable: Drawable? = remember(app.packageName) {
+        AppUsageTracker.getCachedAppIcon(context, app.packageName)
     }
 
     Box(
@@ -585,45 +631,54 @@ private fun RealAppScreenTimeRowItem(
             .border(
                 1.dp,
                 if (isExceeded) colors.alert.copy(alpha = 0.45f)
-                else if (hasLimit) Color(0xFFFF8800).copy(alpha = 0.25f)
+                else if (hasLimit) Color(0xFFFF8800).copy(alpha = 0.3f)
                 else colors.borderSubtle,
                 RoundedCornerShape(12.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = 11.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Real App Icon + Names
+            // Left: Real App Icon + App Name (NO PACKAGE NAME)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
                 RealAppIcon(
                     drawable = appIconDrawable,
-                    sizeDp = 40
+                    sizeDp = 42
                 )
 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
                     Text(
                         text = app.appNameBangla,
                         color = colors.textPrimary,
-                        fontSize = 13.5.sp,
+                        fontSize = 14.sp,
                         fontFamily = HindSiliguri,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(1.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = app.packageName,
-                        color = colors.textMuted,
-                        fontSize = 10.5.sp,
+                        text = if (hasLimit) {
+                            if (isExceeded) "বর্তমানে ব্লক করা রয়েছে 🔒"
+                            else "দৈনিক সীমা: ${app.limitMinutes} মি."
+                        } else {
+                            "সীমা নির্ধারণ করা নেই"
+                        },
+                        color = if (isExceeded) colors.alert else if (hasLimit) Color(0xFFFF8800) else colors.textMuted,
+                        fontSize = 11.sp,
+                        fontFamily = HindSiliguri,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -635,9 +690,9 @@ private fun RealAppScreenTimeRowItem(
             // Right: Real Usage Today & Limit Status
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${app.usedMinutesToday} মিনিট ব্যবহৃত",
+                    text = "${app.usedMinutesToday} মি. ব্যবহৃত",
                     color = colors.textSecondary,
-                    fontSize = 11.5.sp,
+                    fontSize = 12.sp,
                     fontFamily = HindSiliguri,
                     fontWeight = FontWeight.Medium
                 )
@@ -645,28 +700,22 @@ private fun RealAppScreenTimeRowItem(
                 if (hasLimit) {
                     if (isExceeded) {
                         Text(
-                            text = "সীমা শেষ (${app.limitMinutes} মি.) 🔒",
+                            text = "সীমা শেষ",
                             color = colors.alert,
-                            fontSize = 10.5.sp,
+                            fontSize = 11.sp,
                             fontFamily = HindSiliguri,
                             fontWeight = FontWeight.Bold
                         )
                     } else {
+                        val remaining = (app.limitMinutes - app.usedMinutesToday).coerceAtLeast(0)
                         Text(
-                            text = "সীমা: ${app.limitMinutes} মি. (${app.limitMinutes - app.usedMinutesToday} মি. বাকি)",
+                            text = "${remaining} মি. বাকি",
                             color = Color(0xFFFF8800),
-                            fontSize = 10.5.sp,
+                            fontSize = 11.sp,
                             fontFamily = HindSiliguri,
                             fontWeight = FontWeight.Medium
                         )
                     }
-                } else {
-                    Text(
-                        text = "কোনো সীমা নেই",
-                        color = colors.textMuted,
-                        fontSize = 10.5.sp,
-                        fontFamily = HindSiliguri
-                    )
                 }
             }
         }
