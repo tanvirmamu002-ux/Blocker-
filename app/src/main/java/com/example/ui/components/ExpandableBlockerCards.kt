@@ -57,6 +57,7 @@ import com.example.data.CategoryFilter
 import com.example.state.FocusViewModel
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.HindSiliguri
+import com.example.util.FocusLockPreferences
 
 /**
  * Data specification for individual apps/services inside Social Media or Short Video blockers
@@ -345,13 +346,15 @@ fun ExpandableShortVideoBlockerCard(
     val colors = AppTheme.colors
     var isExpanded by remember { mutableStateOf(false) }
 
-    // Map of packageName to blocked state
+    val prefs = remember { FocusLockPreferences.getInstance(context) }
+    val savedBlockedShorts = remember { prefs.getBlockedShortsPackages() }
+
+    // Map of packageName to blocked state synced with FocusLockPreferences
     val blockedShortsMap = remember {
         mutableStateMapOf<String, Boolean>().apply {
-            put("com.google.android.youtube.shorts", true)
-            put("com.instagram.android.reels", true)
-            put("com.facebook.katana.reels", true)
-            put("com.zhiliaoapp.musically", true)
+            POPULAR_SHORT_VIDEO_APPS.forEach { appItem ->
+                put(appItem.packageName, savedBlockedShorts.contains(appItem.packageName))
+            }
         }
     }
 
@@ -541,7 +544,9 @@ fun ExpandableShortVideoBlockerCard(
                                 isBlocked = isAppBlocked,
                                 context = context,
                                 onToggle = {
-                                    blockedShortsMap[appItem.packageName] = !isAppBlocked
+                                    val newState = !isAppBlocked
+                                    blockedShortsMap[appItem.packageName] = newState
+                                    prefs.setShortsPackageBlocked(appItem.packageName, newState)
                                 }
                             )
                         }

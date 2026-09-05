@@ -446,4 +446,34 @@ class FocusLockPreferences(context: Context) {
     // Advanced DNS Protection Setting
     fun isDnsProtectionEnabled(): Boolean = prefs.getBoolean("filter_dns_protection", false)
     fun saveDnsProtectionEnabled(enabled: Boolean) = prefs.edit().putBoolean("filter_dns_protection", enabled).apply()
+
+    // Short Video & Reels Platforms Blocklist
+    fun getBlockedShortsPackages(): Set<String> {
+        val defaultSet = setOf(
+            "com.google.android.youtube.shorts",
+            "com.instagram.android.reels",
+            "com.facebook.katana.reels",
+            "com.zhiliaoapp.musically"
+        )
+        return prefs.getStringSet("blocked_shorts_packages", defaultSet) ?: defaultSet
+    }
+
+    fun saveBlockedShortsPackages(packages: Set<String>) {
+        prefs.edit().putStringSet("blocked_shorts_packages", packages).apply()
+    }
+
+    fun isShortsPackageBlocked(packageName: String): Boolean {
+        return getBlockedShortsPackages().contains(packageName)
+    }
+
+    fun setShortsPackageBlocked(packageName: String, blocked: Boolean) {
+        val current = getBlockedShortsPackages().toMutableSet()
+        if (blocked) {
+            current.add(packageName)
+        } else {
+            current.remove(packageName)
+        }
+        saveBlockedShortsPackages(current)
+    }
 }
+

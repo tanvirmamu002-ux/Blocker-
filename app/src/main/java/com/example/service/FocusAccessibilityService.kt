@@ -18,6 +18,18 @@ class FocusAccessibilityService : AccessibilityService() {
     private var lastBlockedPackageName = ""
     private var lastAdultKeywordBlockTimeMs = 0L
 
+    // Battery optimization & throttle tracking
+    private var lastProcessTimeMs = 0L
+    private var lastShortsBlockTimeMs = 0L
+    private var lastProcessedPackage = ""
+
+    private lateinit var overlayManager: AntiFlashOverlayManager
+
+    override fun onCreate() {
+        super.onCreate()
+        overlayManager = AntiFlashOverlayManager(applicationContext)
+    }
+
     private val blockedPackages = setOf(
         "com.facebook.katana",
         "com.facebook.orca",
@@ -35,12 +47,97 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
+        // 1. Strict Event Filtering: Ignore any event that is not TYPE_WINDOW_STATE_CHANGED
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            return
+        }
+
         val packageName = event.packageName?.toString() ?: return
 
-        // Ignore our own app package
+        // Ignore our own app package immediately
         if (packageName == applicationContext.packageName) return
 
+        val now = System.currentTimeMillis()
+
+        // 2. Throttle: Limit node and state evaluations to at least 300ms apart for same package
+        if (packageName == lastProcessedPackage && now - lastProcessTimeMs < 300L) {
+            return
+        }
+        lastProcessTimeMs = now
+        lastProcessedPackage = packageName
+
+        val className = event.className?.toString() ?: ""
         val prefs = FocusLockPreferences.getInstance(applicationContext)
+
+        // -------------------------------------------------------------
+        // Dedicated Short Video / Reels Blocking System (Autonomous & Targeted)
+        // -------------------------------------------------------------
+        // Battery optimization: Early-exit immediately if not a target shorts host
+        if (ShortVideoDetector.isPotentialShortsHost(packageName)) {
+            val rootNode = rootInActiveWindow
+            val isShorts = ShortVideoDetector.shouldBlockShortVideo(
+                context = applicationContext,
+                packageName = packageName,
+                className = className,
+                rootNode = rootNode
+            )
+            rootNode?.recycle()
+
+            if (isShorts) {
+                // Guard: Prevent rapid multiple firing on the same screen (1500ms guard)
+                if (now - lastShortsBlockTimeMs > 1500L) {
+                    lastShortsBlockTimeMs = now
+
+                    // Step 1: Opaque full-screen overlay to immediately eliminate content flash
+                    overlayManager.showTemporaryAntiFlashOverlay(dismissAfterMs = 600L)
+
+                    // Step 2: Kick user out of the Reels/Shorts screen back to home
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+
+                    // Step 3: Record protected activity
+                    val activity = RecentActivity(
+                        id = System.currentTimeMillis().toString(),
+                        titleBangla = "শর্টস / রিলস ভিডিও প্রতিহত",
+                        titleEnglish = "Short Video / Reels Blocked",
+                        timeAgoBangla = "এইমাত্র",
+                        timeAgoEnglish = "Just now",
+                        isSuccess = true,
+                        iconType = "shorts",
+                        isSensitive = false
+                    )
+                    val currentProtected = prefs.getProtectedActivities().toMutableList()
+                    currentProtected.add(0, activity)
+                    prefs.saveProtectedActivities(currentProtected)
+
+                    // Step 4: Notification alert if enabled
+                    if (prefs.getNotifBlocking()) {
+                        FocusNotificationHelper.sendBlockAlertNotification(
+                            context = applicationContext,
+                            appName = when {
+                                packageName.contains("youtube") -> "YouTube Shorts"
+                                packageName.contains("instagram") -> "Instagram Reels"
+                                packageName.contains("facebook") -> "Facebook Reels"
+                                packageName.contains("tiktok") -> "TikTok"
+                                packageName.contains("like") -> "Likee"
+                                else -> "Short Video"
+                            },
+                            reason = "আসক্তিকর শর্ট ভিডিও ও রিলস স্ক্রিন ব্লক করা হয়েছে"
+                        )
+                    }
+
+                    // Step 5: User feedback via non-intrusive Toast
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        android.widget.Toast.makeText(
+                            applicationContext,
+                            "⚡ শর্ট ভিডিও / রিলস ব্লক করা হয়েছে",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                return
+            }
+        }
+
         val lockState = prefs.getFocusLockState()
         val config = prefs.getFocusLockConfig()
 
@@ -50,19 +147,6 @@ class FocusAccessibilityService : AccessibilityService() {
         if (lockState == FocusLockState.ACTIVE || lockState == FocusLockState.EMERGENCY_REQUEST) {
             if (config.blockApps && (blockedPackages.contains(packageName) || AppUsageTracker.getAppLimitConfig(applicationContext, packageName).second)) {
                 shouldBlock = true
-            }
-            
-            if (!shouldBlock && config.blockShorts) {
-                if (packageName.contains("tiktok") || packageName.contains("musically") || packageName.contains("trill")) {
-                    shouldBlock = true
-                } else if (packageName.contains("youtube") || packageName.contains("instagram") || packageName.contains("facebook")) {
-                    val rootNode = rootInActiveWindow
-                    if (rootNode != null) {
-                        val foundShorts = searchForShortsKeywords(rootNode)
-                        if (foundShorts) shouldBlock = true
-                        rootNode.recycle()
-                    }
-                }
             }
 
             if (!shouldBlock && config.blockWebsites) {
@@ -94,7 +178,6 @@ class FocusAccessibilityService : AccessibilityService() {
                 val foundAdult = searchForAdultContent(rootNode)
                 rootNode.recycle()
                 if (foundAdult) {
-                    val now = System.currentTimeMillis()
                     if (now - lastAdultKeywordBlockTimeMs > 1200L) {
                         lastAdultKeywordBlockTimeMs = now
 
@@ -140,7 +223,6 @@ class FocusAccessibilityService : AccessibilityService() {
         }
 
         if (shouldBlock || isTimeLimitExceeded || isOneTimeBlocked) {
-            val now = System.currentTimeMillis()
             // Debounce blocking actions for the same package within 1.5 seconds to prevent spam and crashes
             if (now - lastBlockActionTimeMs < 1500L && packageName == lastBlockedPackageName) {
                 return
@@ -199,24 +281,6 @@ class FocusAccessibilityService : AccessibilityService() {
                 android.widget.Toast.makeText(applicationContext, toastMsg, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    private fun searchForShortsKeywords(node: AccessibilityNodeInfo): Boolean {
-        val text = node.text?.toString()?.lowercase() ?: ""
-        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-        
-        if (text.contains("shorts") || desc.contains("shorts") || text.contains("reels") || desc.contains("reels")) {
-            return true
-        }
-        
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i)
-            if (child != null) {
-                if (searchForShortsKeywords(child)) return true
-                child.recycle()
-            }
-        }
-        return false
     }
 
     private fun searchForDistractingWebsites(
