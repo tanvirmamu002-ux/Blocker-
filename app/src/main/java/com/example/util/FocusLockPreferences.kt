@@ -447,15 +447,46 @@ class FocusLockPreferences(context: Context) {
     fun isDnsProtectionEnabled(): Boolean = prefs.getBoolean("filter_dns_protection", false)
     fun saveDnsProtectionEnabled(enabled: Boolean) = prefs.edit().putBoolean("filter_dns_protection", enabled).apply()
 
-    // Short Video & Reels Platforms Blocklist
+    // Social Media Platforms Blocklist (All OFF by default)
+    fun getBlockedSocialPackages(): Set<String> {
+        if (!prefs.getBoolean("social_initialized_all_off_v1", false)) {
+            prefs.edit()
+                .putStringSet("blocked_social_packages", emptySet())
+                .putBoolean("social_initialized_all_off_v1", true)
+                .apply()
+            return emptySet()
+        }
+        return prefs.getStringSet("blocked_social_packages", emptySet()) ?: emptySet()
+    }
+
+    fun saveBlockedSocialPackages(packages: Set<String>) {
+        prefs.edit().putStringSet("blocked_social_packages", packages).apply()
+    }
+
+    fun isSocialPackageBlocked(packageName: String): Boolean {
+        return getBlockedSocialPackages().contains(packageName)
+    }
+
+    fun setSocialPackageBlocked(packageName: String, blocked: Boolean) {
+        val current = getBlockedSocialPackages().toMutableSet()
+        if (blocked) {
+            current.add(packageName)
+        } else {
+            current.remove(packageName)
+        }
+        saveBlockedSocialPackages(current)
+    }
+
+    // Short Video & Reels Platforms Blocklist (All OFF by default)
     fun getBlockedShortsPackages(): Set<String> {
-        val defaultSet = setOf(
-            "com.google.android.youtube.shorts",
-            "com.instagram.android.reels",
-            "com.facebook.katana.reels",
-            "com.zhiliaoapp.musically"
-        )
-        return prefs.getStringSet("blocked_shorts_packages", defaultSet) ?: defaultSet
+        if (!prefs.getBoolean("shorts_initialized_all_off_v1", false)) {
+            prefs.edit()
+                .putStringSet("blocked_shorts_packages", emptySet())
+                .putBoolean("shorts_initialized_all_off_v1", true)
+                .apply()
+            return emptySet()
+        }
+        return prefs.getStringSet("blocked_shorts_packages", emptySet()) ?: emptySet()
     }
 
     fun saveBlockedShortsPackages(packages: Set<String>) {

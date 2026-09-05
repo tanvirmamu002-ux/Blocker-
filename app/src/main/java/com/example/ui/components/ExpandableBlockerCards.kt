@@ -123,15 +123,18 @@ fun ExpandableSocialMediaBlockerCard(
     context: Context
 ) {
     val colors = AppTheme.colors
+    val prefs = remember { FocusLockPreferences.getInstance(context) }
     var isExpanded by remember { mutableStateOf(false) }
 
-    // Map of packageName to blocked state (initial dummy/UI state for individual selection)
+    // Read saved blocked social media packages (Starts 100% empty/OFF by default)
+    val savedBlockedSocial = remember { prefs.getBlockedSocialPackages() }
+
+    // Map of packageName to blocked state synced with FocusLockPreferences (All OFF initially)
     val blockedAppsMap = remember {
         mutableStateMapOf<String, Boolean>().apply {
-            // Default select a few common ones to show functional UI
-            put("com.facebook.katana", true)
-            put("com.instagram.android", true)
-            put("com.zhiliaoapp.musically", true)
+            POPULAR_SOCIAL_MEDIA_APPS.forEach { appItem ->
+                put(appItem.packageName, savedBlockedSocial.contains(appItem.packageName))
+            }
         }
     }
 
@@ -321,7 +324,9 @@ fun ExpandableSocialMediaBlockerCard(
                                 isBlocked = isAppBlocked,
                                 context = context,
                                 onToggle = {
-                                    blockedAppsMap[appItem.packageName] = !isAppBlocked
+                                    val newState = !isAppBlocked
+                                    blockedAppsMap[appItem.packageName] = newState
+                                    prefs.setSocialPackageBlocked(appItem.packageName, newState)
                                 }
                             )
                         }

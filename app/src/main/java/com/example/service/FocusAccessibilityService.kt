@@ -20,9 +20,12 @@ class FocusAccessibilityService : AccessibilityService() {
 
     // Battery optimization & throttle tracking
     private var lastProcessTimeMs = 0L
-    private var lastShortsBlockTimeMs = 0L
+    private var lastShortsEjectionTimeMs = 0L
+    private var lastSocialBlockTimeMs = 0L
+    private var consecutiveShortsEjections = 0
     private var lastProcessedPackage = ""
 
+    private val serviceHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private lateinit var overlayManager: AntiFlashOverlayManager
 
     override fun onCreate() {
@@ -47,8 +50,12 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        // 1. Strict Event Filtering: Ignore any event that is not TYPE_WINDOW_STATE_CHANGED
-        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        val eventType = event.eventType
+        // Listen to window state, content changes, scrolling, and user clicks
+        if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+            eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED &&
+            eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) {
             return
         }
 
@@ -57,23 +64,42 @@ class FocusAccessibilityService : AccessibilityService() {
         // Ignore our own app package immediately
         if (packageName == applicationContext.packageName) return
 
+        val isPotentialShorts = ShortVideoDetector.isPotentialShortsHost(packageName)
+        val prefs = FocusLockPreferences.getInstance(applicationContext)
+        val lockState = prefs.getFocusLockState()
+        val isLockActive = (lockState == FocusLockState.ACTIVE || lockState == FocusLockState.EMERGENCY_REQUEST)
+        val isAdultFilterEnabled = prefs.isAdultContentBlockerEnabled()
+        val isTimeLimitConfigured = AppUsageTracker.getAppLimitConfig(applicationContext, packageName).second
+        val oneTimeBlockedPackage = prefs.getOneTimeBlockPackage()
+        val isOneTimeBlocked = !oneTimeBlockedPackage.isNullOrEmpty() && oneTimeBlockedPackage == packageName
+        val isSocialBlocked = prefs.isSocialPackageBlocked(packageName)
+
+        // Ultra-fast O(1) early-exit if package is not relevant to any active protection feature
+        if (!isPotentialShorts && !isLockActive && !isAdultFilterEnabled && !isTimeLimitConfigured && !isOneTimeBlocked && !isSocialBlocked) {
+            return
+        }
+
         val now = System.currentTimeMillis()
 
-        // 2. Throttle: Limit node and state evaluations to at least 300ms apart for same package
-        if (packageName == lastProcessedPackage && now - lastProcessTimeMs < 300L) {
+        // Responsive throttle: Clicks and Window switches are checked immediately (40ms), while scrolls debounce at 160ms
+        val minInterval = if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            40L
+        } else {
+            160L
+        }
+
+        if (packageName == lastProcessedPackage && now - lastProcessTimeMs < minInterval) {
             return
         }
         lastProcessTimeMs = now
         lastProcessedPackage = packageName
 
         val className = event.className?.toString() ?: ""
-        val prefs = FocusLockPreferences.getInstance(applicationContext)
 
         // -------------------------------------------------------------
         // Dedicated Short Video / Reels Blocking System (Autonomous & Targeted)
         // -------------------------------------------------------------
-        // Battery optimization: Early-exit immediately if not a target shorts host
-        if (ShortVideoDetector.isPotentialShortsHost(packageName)) {
+        if (isPotentialShorts) {
             val rootNode = rootInActiveWindow
             val isShorts = ShortVideoDetector.shouldBlockShortVideo(
                 context = applicationContext,
@@ -81,64 +107,125 @@ class FocusAccessibilityService : AccessibilityService() {
                 className = className,
                 rootNode = rootNode
             )
-            rootNode?.recycle()
+            try { rootNode?.recycle() } catch (e: Exception) {}
 
             if (isShorts) {
-                // Guard: Prevent rapid multiple firing on the same screen (1500ms guard)
-                if (now - lastShortsBlockTimeMs > 1500L) {
-                    lastShortsBlockTimeMs = now
+                val timeSinceLastEject = now - lastShortsEjectionTimeMs
 
-                    // Step 1: Opaque full-screen overlay to immediately eliminate content flash
-                    overlayManager.showTemporaryAntiFlashOverlay(dismissAfterMs = 600L)
+                // Micro-guard (180ms) prevents duplicate execution on the exact same frame
+                if (timeSinceLastEject > 180L) {
+                    if (timeSinceLastEject < 4000L) {
+                        consecutiveShortsEjections++
+                    } else {
+                        consecutiveShortsEjections = 1
+                    }
+                    lastShortsEjectionTimeMs = now
 
-                    // Step 2: Kick user out of the Reels/Shorts screen back to home
-                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    // Step 1: Opaque overlay to instantly eliminate content flash (dismisses quickly after 350ms)
+                    overlayManager.showTemporaryAntiFlashOverlay(dismissAfterMs = 350L)
 
-                    // Step 3: Record protected activity
-                    val activity = RecentActivity(
-                        id = System.currentTimeMillis().toString(),
-                        titleBangla = "শর্টস / রিলস ভিডিও প্রতিহত",
-                        titleEnglish = "Short Video / Reels Blocked",
-                        timeAgoBangla = "এইমাত্র",
-                        timeAgoEnglish = "Just now",
-                        isSuccess = true,
-                        iconType = "shorts",
-                        isSensitive = false
-                    )
-                    val currentProtected = prefs.getProtectedActivities().toMutableList()
-                    currentProtected.add(0, activity)
-                    prefs.saveProtectedActivities(currentProtected)
-
-                    // Step 4: Notification alert if enabled
-                    if (prefs.getNotifBlocking()) {
-                        FocusNotificationHelper.sendBlockAlertNotification(
-                            context = applicationContext,
-                            appName = when {
-                                packageName.contains("youtube") -> "YouTube Shorts"
-                                packageName.contains("instagram") -> "Instagram Reels"
-                                packageName.contains("facebook") -> "Facebook Reels"
-                                packageName.contains("tiktok") -> "TikTok"
-                                packageName.contains("like") -> "Likee"
-                                else -> "Short Video"
-                            },
-                            reason = "আসক্তিকর শর্ট ভিডিও ও রিলস স্ক্রিন ব্লক করা হয়েছে"
-                        )
+                    // Step 2: Decisive physical exit from the screen
+                    if (consecutiveShortsEjections > 1) {
+                        // Rapid re-entry or stubborn foreground: Kick straight to Android Home Screen
+                        performGlobalAction(GLOBAL_ACTION_HOME)
+                        sendExplicitHomeIntent()
+                    } else {
+                        // First attempt: Pop back (returns to normal feed if tapped from feed)
+                        val backHandled = performGlobalAction(GLOBAL_ACTION_BACK)
+                        if (!backHandled) {
+                            performGlobalAction(GLOBAL_ACTION_HOME)
+                            sendExplicitHomeIntent()
+                        }
                     }
 
-                    // Step 5: User feedback via non-intrusive Toast
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        android.widget.Toast.makeText(
-                            applicationContext,
-                            "⚡ শর্ট ভিডিও / রিলস ব্লক করা হয়েছে",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                    // Step 3: Fast Watchdog Verification - Ensures user is never left stuck or bypassing
+                    serviceHandler.postDelayed({
+                        verifyAndForceEjectIfStillInShorts(packageName)
+                    }, 220L)
+                    serviceHandler.postDelayed({
+                        verifyAndForceEjectIfStillInShorts(packageName)
+                    }, 480L)
+
+                    // Step 4: Record protected activity & notify user (debounced to avoid spamming)
+                    if (now - lastNotificationTimeMs > 2500L) {
+                        lastNotificationTimeMs = now
+
+                        val activity = RecentActivity(
+                            id = System.currentTimeMillis().toString(),
+                            titleBangla = "শর্টস / রিলস ভিডিও প্রতিহত",
+                            titleEnglish = "Short Video / Reels Blocked",
+                            timeAgoBangla = "এইমাত্র",
+                            timeAgoEnglish = "Just now",
+                            isSuccess = true,
+                            iconType = "shorts",
+                            isSensitive = false
+                        )
+                        val currentProtected = prefs.getProtectedActivities().toMutableList()
+                        currentProtected.add(0, activity)
+                        prefs.saveProtectedActivities(currentProtected)
+
+                        if (prefs.getNotifBlocking()) {
+                            FocusNotificationHelper.sendBlockAlertNotification(
+                                context = applicationContext,
+                                appName = when {
+                                    packageName.contains("youtube") -> "YouTube Shorts"
+                                    packageName.contains("instagram") -> "Instagram Reels"
+                                    packageName.contains("facebook") -> "Facebook Reels"
+                                    packageName.contains("tiktok") -> "TikTok"
+                                    packageName.contains("like") -> "Likee"
+                                    else -> "Short Video"
+                                },
+                                reason = "আসক্তিকর শর্ট ভিডিও ও রিলস স্ক্রিন ব্লক করা হয়েছে"
+                            )
+                        }
+
+                        serviceHandler.post {
+                            android.widget.Toast.makeText(
+                                applicationContext,
+                                "⚡ শর্ট ভিডিও / রিলস স্ক্রিন থেকে বের করে দেওয়া হয়েছে",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
                 }
                 return
             }
         }
 
-        val lockState = prefs.getFocusLockState()
+
+        // 0. Check if package is blocked under Social Media Blocker
+        if (isSocialBlocked) {
+            if (now - lastSocialBlockTimeMs > 1200L) {
+                lastSocialBlockTimeMs = now
+                overlayManager.showTemporaryAntiFlashOverlay(dismissAfterMs = 400L)
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                sendExplicitHomeIntent()
+
+                val activity = RecentActivity(
+                    id = System.currentTimeMillis().toString(),
+                    titleBangla = "সোশ্যাল মিডিয়া অ্যাপ প্রতিহত",
+                    titleEnglish = "Social Media App Blocked",
+                    timeAgoBangla = "এইমাত্র",
+                    timeAgoEnglish = "Just now",
+                    isSuccess = true,
+                    iconType = "social",
+                    isSensitive = false
+                )
+                val currentProtected = prefs.getProtectedActivities().toMutableList()
+                currentProtected.add(0, activity)
+                prefs.saveProtectedActivities(currentProtected)
+
+                serviceHandler.post {
+                    android.widget.Toast.makeText(
+                        applicationContext,
+                        "🛡️ সোশ্যাল মিডিয়া ব্লকার: অ্যাপটি ব্লক করা রয়েছে",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            return
+        }
+
         val config = prefs.getFocusLockConfig()
 
         var shouldBlock = false
@@ -166,13 +253,9 @@ class FocusAccessibilityService : AccessibilityService() {
         // 2. Check if 24-hour App Screen Time Limit is exceeded
         val isTimeLimitExceeded = AppUsageTracker.isAppLimitExceeded(applicationContext, packageName)
 
-        // 3. Check if One-Time Block is active for this package
-        val oneTimeBlockedPackage = prefs.getOneTimeBlockPackage()
-        val isOneTimeBlocked = !oneTimeBlockedPackage.isNullOrEmpty() && oneTimeBlockedPackage == packageName
-
-        // 4. Real Keyword Protection System (Adult / NSFW Content Blocker)
+        // 3. Real Keyword Protection System (Adult / NSFW Content Blocker)
         // Works in browsers and media apps whenever Adult Content Blocker is enabled
-        if (!shouldBlock && !isTimeLimitExceeded && !isOneTimeBlocked && prefs.isAdultContentBlockerEnabled()) {
+        if (!shouldBlock && !isTimeLimitExceeded && !isOneTimeBlocked && isAdultFilterEnabled) {
             val rootNode = rootInActiveWindow
             if (rootNode != null) {
                 val foundAdult = searchForAdultContent(rootNode)
@@ -344,6 +427,48 @@ class FocusAccessibilityService : AccessibilityService() {
             }
         }
         return false
+    }
+
+    /**
+     * Dispatches an explicit Home intent to the Android ActivityManager to guarantee
+     * that the user is immediately taken back to their Home Screen even if the global
+     * accessibility action was delayed by an in-app transition or modal.
+     */
+    private fun sendExplicitHomeIntent() {
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            }
+            startActivity(homeIntent)
+        } catch (e: Exception) {
+            // Global action already requested
+        }
+    }
+
+    /**
+     * Delayed Watchdog Verification:
+     * Inspects active window nodes ~200-480ms after ejection.
+     * If the foreground is still showing the target Shorts/Reels screen, it forcibly re-ejects the user.
+     */
+    private fun verifyAndForceEjectIfStillInShorts(targetPackage: String) {
+        val rootNode = rootInActiveWindow ?: return
+        try {
+            val stillShorts = ShortVideoDetector.shouldBlockShortVideo(
+                context = applicationContext,
+                packageName = targetPackage,
+                className = "",
+                rootNode = rootNode
+            )
+            if (stillShorts) {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                sendExplicitHomeIntent()
+            }
+        } catch (e: Exception) {
+            // Handled
+        } finally {
+            try { rootNode.recycle() } catch (e: Exception) {}
+        }
     }
 
     override fun onInterrupt() {

@@ -794,7 +794,7 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
             titleEnglish = "Social Media Blocker",
             descBangla = "Facebook, Instagram, Twitter, TikTok ইত্যাদি সোশাল মিডিয়া প্ল্যাটফর্ম ব্লক",
             descEnglish = "Blocks Facebook, Instagram, Twitter, TikTok and other social platforms",
-            isEnabled = true,
+            isEnabled = false,
             iconType = "social"
         ),
         CategoryFilter(
@@ -803,7 +803,7 @@ class FocusViewModel(application: android.app.Application) : androidx.lifecycle.
             titleEnglish = "Short Video Blocker",
             descBangla = "YouTube Shorts, Instagram Reels, FB Reels ও আসক্তিকর ছোট ভিডিও বন্ধ",
             descEnglish = "Blocks YouTube Shorts, Reels, TikTok and addictive short-form video feeds",
-            isEnabled = true,
+            isEnabled = false,
             iconType = "shorts"
         ),
         CategoryFilter(
